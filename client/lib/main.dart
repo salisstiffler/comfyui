@@ -31,7 +31,6 @@ class GeneratorProvider extends ChangeNotifier {
     seed = task.seed;
     randomSeed = task.seed == null;
     
-    // Determine aspect ratio from width/height
     if (task.width == 1024 && task.height == 1024) aspectRatio = '1:1';
     else if (task.width == 832 && task.height == 1216) aspectRatio = '2:3';
     else if (task.width == 1216 && task.height == 832) aspectRatio = '3:2';
@@ -149,7 +148,7 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   bool _isServerOnline = false;
   Timer? _healthCheckTimer;
-  String _username = "Agent";
+  String _username = "Guest";
 
   @override
   void initState() {
@@ -163,7 +162,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _username = prefs.getString('username') ?? "Agent";
+      _username = prefs.getString('username') ?? "Guest";
       ApiService.userId = _username;
     });
   }
@@ -254,14 +253,41 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                _isServerOnline ? 'SYSTEM ONLINE' : 'OFFLINE',
+                _isServerOnline ? 'ENGINE READY' : 'CORE DISCONNECTED',
                 style: const TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1.2,
                   color: Colors.white54,
                 ),
               ),
+              if (!_isServerOnline) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () async {
+                    final success = await ApiService.wakeEngine();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(success ? 'Waking up engine...' : 'Bridge not found'),
+                          backgroundColor: success ? const Color(0xFF22C55E) : Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'WAKE UP',
+                      style: TextStyle(fontSize: 8, color: Colors.amber, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           GestureDetector(
@@ -272,14 +298,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   _username.toUpperCase(),
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 const SizedBox(width: 8),
                 const CircleAvatar(
                   radius: 14,
                   backgroundColor: Colors.white10,
-                  child: Icon(Icons.person, size: 16, color: Colors.white),
+                  child: Icon(Icons.person_outline, size: 16, color: Colors.white),
                 ),
               ],
             ),
@@ -296,11 +322,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       builder:
           (ctx) => AlertDialog(
             backgroundColor: const Color(0xFF0F172A),
-            title: const Text('IDENTITY'),
+            title: const Text('USER PROFILE'),
             content: TextField(
               controller: controller,
               decoration: const InputDecoration(
-                labelText: 'CODENAME',
+                labelText: 'USERNAME',
                 filled: true,
                 fillColor: Colors.white10,
               ),
@@ -349,19 +375,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.bolt_outlined),
-                selectedIcon: Icon(Icons.bolt),
-                label: 'IGNITE',
+                icon: Icon(Icons.auto_awesome_outlined),
+                selectedIcon: Icon(Icons.auto_awesome),
+                label: 'CREATE',
               ),
               NavigationDestination(
-                icon: Icon(Icons.terminal_outlined),
-                selectedIcon: Icon(Icons.terminal),
-                label: 'LOGS',
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history),
+                label: 'HISTORY',
               ),
               NavigationDestination(
-                icon: Icon(Icons.grid_view_outlined),
-                selectedIcon: Icon(Icons.grid_view),
-                label: 'VAULT',
+                icon: Icon(Icons.photo_library_outlined),
+                selectedIcon: Icon(Icons.photo_library),
+                label: 'GALLERY',
               ),
             ],
           ),
@@ -420,7 +446,6 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
     
-    // Initialize controllers with provider values
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final gen = Provider.of<GeneratorProvider>(context, listen: false);
       _promptController.text = gen.prompt;
@@ -467,7 +492,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       if (pid != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('COMMAND RECEIVED BY ENGINE'),
+            content: Text('Synthesis started...'),
             backgroundColor: Color(0xFF22C55E),
           ),
         );
@@ -475,7 +500,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('LINK ERROR: $e')),
+          SnackBar(content: Text('Connection error: $e')),
         );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -487,7 +512,6 @@ class _GeneratorScreenState extends State<GeneratorScreen>
     super.build(context);
     final gen = Provider.of<GeneratorProvider>(context);
     
-    // Sync text controllers if provider changes from outside (e.g. Refine)
     if (_promptController.text != gen.prompt) {
        _promptController.text = gen.prompt;
     }
@@ -524,17 +548,15 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       animation: _pulseController,
       builder: (context, child) {
         return Container(
-          width: 100,
-          height: 100,
+          width: 80,
+          height: 80,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(
-                  0xFF22C55E,
-                ).withOpacity(0.1 + (_pulseController.value * 0.15)),
+                color: const Color(0xFF22C55E).withOpacity(0.1 + (_pulseController.value * 0.15)),
                 blurRadius: 30 + (_pulseController.value * 20),
-                spreadRadius: 5,
+                spreadRadius: 2,
               ),
             ],
           ),
@@ -550,15 +572,15 @@ class _GeneratorScreenState extends State<GeneratorScreen>
         Text(
           'COMFY PRO MAX',
           style: GoogleFonts.archivo(
-            fontSize: 32,
+            fontSize: 28,
             fontWeight: FontWeight.w900,
-            letterSpacing: 3,
+            letterSpacing: 2,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
-          'QUANTUM IMAGE SYNTHESIZER',
+          'AI CREATIVE ENGINE',
           style: GoogleFonts.spaceGrotesk(
             fontSize: 10,
             fontWeight: FontWeight.w500,
@@ -585,7 +607,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
             onChanged: gen.setPrompt,
             style: GoogleFonts.spaceGrotesk(fontSize: 16, color: Colors.white),
             decoration: InputDecoration(
-              hintText: 'Transmit your vision...',
+              hintText: 'Describe your imagination...',
               hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
               contentPadding: const EdgeInsets.all(24),
               border: InputBorder.none,
@@ -598,8 +620,8 @@ class _GeneratorScreenState extends State<GeneratorScreen>
               children: [
                 IconButton(
                   onPressed: () => _surpriseMe(gen),
-                  icon: const Icon(Icons.auto_awesome, color: Colors.amber),
-                  tooltip: 'Surprise Me',
+                  icon: const Icon(Icons.lightbulb_outline, color: Colors.amber),
+                  tooltip: 'INSPIRATION',
                 ),
               ],
             ),
@@ -612,35 +634,38 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   Widget _buildAdvancedToggle() {
     return GestureDetector(
       onTap: () => setState(() => _showAdvanced = !_showAdvanced),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _showAdvanced ? 'HIDE ADVANCED' : 'SHOW ADVANCED',
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: Colors.white30,
-              letterSpacing: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _showAdvanced ? 'HIDE OPTIONS' : 'ADVANCED OPTIONS',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white30,
+                letterSpacing: 1,
+              ),
             ),
-          ),
-          Icon(
-            _showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-            color: Colors.white30,
-            size: 16,
-          ),
-        ],
+            Icon(
+              _showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              color: Colors.white30,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildAdvancedControls(GeneratorProvider gen) {
     return Container(
-      margin: const EdgeInsets.only(top: 24),
+      margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.black12,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white10),
       ),
       child: Column(
@@ -648,7 +673,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
         children: [
           _sliderRow('STEPS', gen.steps, 1, 50, gen.setSteps),
           const SizedBox(height: 16),
-          _sliderRow('CFG SCALE', gen.cfg, 1, 20, gen.setCfg),
+          _sliderRow('GUIDANCE (CFG)', gen.cfg, 1, 20, gen.setCfg),
           const SizedBox(height: 16),
           _sliderRow(
             'BATCH SIZE',
@@ -767,7 +792,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   Widget _label(String text) {
     return Text(
       text,
-      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white30, letterSpacing: 1.5),
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white30, letterSpacing: 1),
     );
   }
 
@@ -788,16 +813,16 @@ class _GeneratorScreenState extends State<GeneratorScreen>
         width: double.infinity,
         decoration: BoxDecoration(
           color: const Color(0xFF22C55E),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: const Color(0xFF22C55E).withOpacity(0.3), blurRadius: 30, offset: const Offset(0, 10)),
+            BoxShadow(color: const Color(0xFF22C55E).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8)),
           ],
         ),
         child: Center(
           child: _isSubmitting
               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : Text(
-                  'IGNITE ENGINE',
+                  'SYNTHESIZE',
                   style: GoogleFonts.archivo(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 2, color: Colors.white),
                 ),
         ),
@@ -867,13 +892,13 @@ class _MonitorScreenState extends State<MonitorScreen> with AutomaticKeepAliveCl
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('LOGBOOK', style: GoogleFonts.archivo(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 3)),
+        title: Text('TASK HISTORY', style: GoogleFonts.archivo(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 2)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         automaticallyImplyLeading: false,
       ),
       body: _tasks.isEmpty
-          ? Center(child: Text('EMPTY REGISTRY', style: TextStyle(color: Colors.white.withOpacity(0.1), letterSpacing: 4)))
+          ? Center(child: Text('NO TASKS YET', style: TextStyle(color: Colors.white.withOpacity(0.1), letterSpacing: 2)))
           : ListView.builder(
               padding: const EdgeInsets.all(24),
               itemCount: _tasks.length,
@@ -930,7 +955,7 @@ class _MonitorScreenState extends State<MonitorScreen> with AutomaticKeepAliveCl
                 children: [
                   const Divider(color: Colors.white10),
                   const SizedBox(height: 12),
-                  _meta('PARAMS', 'CFG: ${task.cfg} • Sampler: ${task.sampler} • Seed: ${task.seed ?? "Random"}'),
+                  _meta('TECHNICAL SPECS', 'CFG: ${task.cfg} • Sampler: ${task.sampler} • Seed: ${task.seed ?? "Auto"}'),
                   if (isDone && task.resultImageUrl != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 16),
@@ -951,14 +976,14 @@ class _MonitorScreenState extends State<MonitorScreen> with AutomaticKeepAliveCl
                            Provider.of<GeneratorProvider>(context, listen: false).updateFromTask(task);
                            Provider.of<NavigationProvider>(context, listen: false).setIndex(0);
                         },
-                        icon: const Icon(Icons.tune, size: 16, color: Color(0xFF22C55E)),
-                        label: const Text('REFINE', style: TextStyle(color: Color(0xFF22C55E), fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.refresh, size: 16, color: Color(0xFF22C55E)),
+                        label: const Text('EVOLVE', style: TextStyle(color: Color(0xFF22C55E), fontWeight: FontWeight.bold)),
                       ),
                       if (isRunning)
                         TextButton.icon(
                           onPressed: () => ApiService.cancelTask(task.promptId).then((_) => _refresh()),
                           icon: const Icon(Icons.close, size: 16),
-                          label: const Text('HALT'),
+                          label: const Text('ABORT'),
                         ),
                     ],
                   ),
@@ -979,24 +1004,24 @@ class _MonitorScreenState extends State<MonitorScreen> with AutomaticKeepAliveCl
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(color: c.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-      child: Text(status.toUpperCase(), style: TextStyle(color: c, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)),
+      child: Text(status.toUpperCase(), style: TextStyle(color: c, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
 
   Widget _buildStatusPulse(String status, double progress) {
     Color c = Colors.grey;
     IconData i = Icons.access_time;
-    if (status == 'completed') { c = const Color(0xFF22C55E); i = Icons.check_circle; }
-    if (status == 'running') { c = Colors.amber; i = Icons.bolt; }
+    if (status == 'completed') { c = const Color(0xFF22C55E); i = Icons.check_circle_outline; }
+    if (status == 'running') { c = Colors.amber; i = Icons.sync; }
     return Stack(alignment: Alignment.center, children: [
-      if (status == 'running') SizedBox(width: 32, height: 32, child: CircularProgressIndicator(value: progress, strokeWidth: 2, color: c)),
+      if (status == 'running') SizedBox(width: 32, height: 32, child: CircularProgressIndicator(value: progress, strokeWidth: 1.5, color: c)),
       Icon(i, color: c, size: 18),
     ]);
   }
 
   Widget _meta(String label, String value) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 8, color: Colors.white24, fontWeight: FontWeight.w900, letterSpacing: 2)),
+      Text(label, style: const TextStyle(fontSize: 8, color: Colors.white24, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
       const SizedBox(height: 4),
       Text(value, style: const TextStyle(fontSize: 11, color: Colors.white70)),
     ]);
@@ -1045,13 +1070,13 @@ class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveCl
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text('IMAGE VAULT', style: GoogleFonts.archivo(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 3)),
+        title: Text('CREATION VAULT', style: GoogleFonts.archivo(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 2)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         automaticallyImplyLeading: false,
       ),
       body: _images.isEmpty
-          ? Center(child: Text('VAULT SEALED', style: TextStyle(color: Colors.white.withOpacity(0.1), letterSpacing: 4)))
+          ? Center(child: Text('VAULT EMPTY', style: TextStyle(color: Colors.white.withOpacity(0.1), letterSpacing: 2)))
           : GridView.builder(
               padding: const EdgeInsets.all(24),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: 0.8),
@@ -1113,7 +1138,7 @@ class ResultDialog extends StatelessWidget {
       final f = File('${d.path}/comfy_${DateTime.now().millisecondsSinceEpoch}.png');
       await f.writeAsBytes(r.bodyBytes);
       if (context.mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('IMAGE STORED IN LOCAL VAULT'), backgroundColor: Color(0xFF22C55E)));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved to Gallery'), backgroundColor: Color(0xFF22C55E)));
     } catch (_) {}
   }
 
@@ -1138,7 +1163,7 @@ class ResultDialog extends StatelessWidget {
                       context: context,
                       builder: (c) => AlertDialog(
                             backgroundColor: Colors.black,
-                            title: const Text('METADATA'),
+                            title: const Text('TECHNICAL SPECS'),
                             content: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1147,7 +1172,7 @@ class ResultDialog extends StatelessWidget {
                                 Text('CFG: ${task.cfg}'),
                                 Text('Sampler: ${task.sampler}'),
                                 Text('Seed: ${task.seed}'),
-                                Text('Size: ${task.width}x${task.height}'),
+                                Text('Dimension: ${task.width}x${task.height}'),
                               ],
                             ),
                           ),
@@ -1174,8 +1199,8 @@ class ResultDialog extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
-                        icon: const Icon(Icons.download),
-                        label: const Text('SAVE'),
+                        icon: const Icon(Icons.file_download_outlined),
+                        label: const Text('EXPORT'),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -1185,9 +1210,9 @@ class ResultDialog extends StatelessWidget {
                         Provider.of<GeneratorProvider>(context, listen: false).updateFromTask(task);
                         Provider.of<NavigationProvider>(context, listen: false).setIndex(0);
                       },
-                      icon: const Icon(Icons.tune, color: Color(0xFF22C55E)),
+                      icon: const Icon(Icons.refresh, color: Color(0xFF22C55E)),
                       style: IconButton.styleFrom(backgroundColor: Colors.white10),
-                      tooltip: 'REFINE',
+                      tooltip: 'EVOLVE',
                     ),
                     const SizedBox(width: 8),
                     IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close), style: IconButton.styleFrom(backgroundColor: Colors.white10)),

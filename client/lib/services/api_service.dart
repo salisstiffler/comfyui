@@ -96,6 +96,16 @@ class ApiService {
     }
   }
 
+  static Future<bool> wakeEngine() async {
+    try {
+      final response = await http.post(Uri.parse('$baseUrl/api/wake'));
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Exception waking engine: $e');
+      return false;
+    }
+  }
+
   static Future<Map<String, dynamic>?> checkStatus(String promptId) async {
     try {
       final response = await http.get(

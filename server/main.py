@@ -67,6 +67,17 @@ class Job(BaseModel):
     images: List[str]
     completed_at: Optional[float] = None
 
+HOST_BRIDGE_URL = "http://host.docker.internal:8189"
+
+@app.post("/api/wake")
+async def wake_engine():
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            response = await client.post(f"{HOST_BRIDGE_URL}/launch")
+            return response.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail="Host bridge not responding. Is host_bridge.py running?")
+
 async def comfy_request(method: str, path: str, json_data: dict = None, params: dict = None):
     url = f"http://{COMFYUI_SERVER}{path}"
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -79,15 +90,20 @@ async def comfy_request(method: str, path: str, json_data: dict = None, params: 
                 response = await client.delete(url, params=params)
             else:
                 raise ValueError(f"Unsupported method: {method}")
-            
+
             response.raise_for_status()
             return response.json() if response.status_code != 204 else None
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail=f"Cannot reach ComfyUI at {COMFYUI_SERVER}. Is it running?")
+        except (httpx.ConnectError, httpx.TimeoutException):
+            # Engine is likely offline
+            raise HTTPException(
+                status_code=503, 
+                detail={"error": "ENGINE_OFFLINE", "message": "ComfyUI is not responding. Please wake the engine."}
+            )
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"ComfyUI returned error: {e.response.text}")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
 
 @app.post("/api/generate")
 async def generate_image(req: GenerateRequest, x_user_id: str = Header("guest")):
