@@ -3,9 +3,13 @@ class AiTask {
   final String prompt;
   final String status;
   final String? resultImageUrl;
+  final String? resultAudioUrl;
+  final String? resultFilename;
+  final double? musicDuration; // Planned song length in seconds
   final DateTime timestamp; // Submission Time
   final DateTime? completedAt; // Completion Time
-  
+  final String type; // 'image' or 'music'
+
   // Advanced Params
   final int steps;
   final double cfg;
@@ -20,8 +24,12 @@ class AiTask {
     required this.prompt,
     required this.status,
     this.resultImageUrl,
+    this.resultAudioUrl,
+    this.resultFilename,
+    this.musicDuration,
     required this.timestamp,
     this.completedAt,
+    this.type = 'image',
     this.steps = 8,
     this.cfg = 1.0,
     this.seed,
@@ -31,14 +39,20 @@ class AiTask {
     this.height = 1024,
   });
 
+  bool get isMusic => type == 'music';
+
   Map<String, dynamic> toMap() {
     return {
       'promptId': promptId,
       'prompt': prompt,
       'status': status,
       'resultImageUrl': resultImageUrl,
+      'resultAudioUrl': resultAudioUrl,
+      'resultFilename': resultFilename,
+      'musicDuration': musicDuration,
       'timestamp': timestamp.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
+      'type': type,
       'steps': steps,
       'cfg': cfg,
       'seed': seed,
@@ -55,10 +69,14 @@ class AiTask {
       prompt: map['prompt'],
       status: map['status'],
       resultImageUrl: map['resultImageUrl'],
+      resultAudioUrl: map['resultAudioUrl'],
+      resultFilename: map['resultFilename'],
+      musicDuration: (map['musicDuration'] as num?)?.toDouble(),
       timestamp: DateTime.parse(map['timestamp']),
       completedAt: map['completedAt'] != null
           ? DateTime.parse(map['completedAt'])
           : null,
+      type: map['type'] ?? 'image',
       steps: map['steps'] ?? 8,
       cfg: (map['cfg'] as num?)?.toDouble() ?? 1.0,
       seed: map['seed'],
@@ -72,6 +90,7 @@ class AiTask {
   AiTask copyWith({
     String? status,
     String? resultImageUrl,
+    String? resultAudioUrl,
     DateTime? completedAt,
   }) {
     return AiTask(
@@ -79,8 +98,12 @@ class AiTask {
       prompt: prompt,
       status: status ?? this.status,
       resultImageUrl: resultImageUrl ?? this.resultImageUrl,
+      resultAudioUrl: resultAudioUrl ?? this.resultAudioUrl,
+      resultFilename: resultFilename ?? this.resultFilename,
+      musicDuration: musicDuration ?? this.musicDuration,
       timestamp: timestamp,
       completedAt: completedAt ?? this.completedAt,
+      type: type,
       steps: steps,
       cfg: cfg,
       seed: seed,
@@ -96,11 +119,7 @@ class AiTask {
       final diff = completedAt!.difference(timestamp);
       return _formatDuration(diff);
     }
-
-    if (status == 'completed' || status == 'cancelled') {
-       return 'FIN';
-    }
-
+    if (status == 'completed' || status == 'cancelled') return 'FIN';
     final diff = DateTime.now().difference(timestamp);
     return _formatDuration(diff);
   }

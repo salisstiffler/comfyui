@@ -21,10 +21,7 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/generate'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': userId,
-        },
+        headers: {'Content-Type': 'application/json', 'X-User-ID': userId},
         body: jsonEncode({
           'prompt': prompt,
           'steps': steps,
@@ -36,17 +33,49 @@ class ApiService {
           'height': height,
         }),
       );
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['prompt_id'];
-      } else {
-        print('Error generating image: ${response.statusCode}');
-        return null;
       }
-    } catch (e) {
-      print('Exception during generate: $e');
       return null;
+    } catch (e) {
+      print('Exception during image generate: $e');
+      return null;
+    }
+  }
+
+  static Future<String?> generateMusic({
+    required String tags,
+    required String lyrics,
+    int bpm = 120,
+    int duration = 120,
+    int? seed,
+    int steps = 30,
+    double cfg = 1.0,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/generate/music'),
+        headers: {'Content-Type': 'application/json', 'X-User-ID': userId},
+        body: jsonEncode({
+          'tags': tags,
+          'lyrics': lyrics,
+          'bpm': bpm,
+          'duration': duration,
+          'seed': seed,
+          'steps': steps,
+          'cfg': cfg,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['prompt_id'];
+      }
+      final error = jsonDecode(response.body);
+      throw Exception(error['detail'] ?? 'SERVER_ERROR');
+    } catch (e) {
+      print('Exception during music generate: $e');
+      rethrow;
     }
   }
 
@@ -61,7 +90,9 @@ class ApiService {
         return list.map((item) {
           final params = item['params'] ?? {};
           final images = item['images'] as List? ?? [];
+          final audioFiles = item['audio_files'] as List? ?? [];
           final compAtVal = item['completed_at'];
+
           DateTime? compAt;
           if (compAtVal != null) {
             compAt = DateTime.fromMillisecondsSinceEpoch(
@@ -77,8 +108,17 @@ class ApiService {
               ((item['timestamp'] as num) * 1000).toInt(),
             ),
             completedAt: compAt,
-            resultImageUrl:
-                images.isNotEmpty ? getImageUrl(images.first) : null,
+            type: item['type'] ?? 'image',
+            resultImageUrl: images.isNotEmpty
+                ? getImageUrl(images.first)
+                : null,
+            resultAudioUrl: audioFiles.isNotEmpty
+                ? getAudioUrl(audioFiles.first)
+                : null,
+            resultFilename: images.isNotEmpty
+                ? images.first
+                : (audioFiles.isNotEmpty ? audioFiles.first : null),
+            musicDuration: (params['duration'] as num?)?.toDouble(),
             steps: params['steps'] ?? 8,
             cfg: (params['cfg'] as num?)?.toDouble() ?? 1.0,
             seed: params['seed'],
@@ -144,5 +184,9 @@ class ApiService {
 
   static String getImageUrl(String filename) {
     return '$baseUrl/api/image/$filename';
+  }
+
+  static String getAudioUrl(String filename) {
+    return '$baseUrl/api/audio/$filename';
   }
 }
