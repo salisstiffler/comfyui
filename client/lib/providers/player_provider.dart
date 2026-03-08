@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'dart:math';
 import '../models/task_model.dart';
 
-enum LoopMode { off, single, all }
+enum PlaybackMode { order, single, loop, shuffle }
 
 class PlaybackProvider extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
+  final Random _random = Random();
 
   List<AiTask> _playlist = [];
   int _currentIndex = -1;
-  LoopMode _loopMode = LoopMode.off;
+  PlaybackMode _mode = PlaybackMode.loop;
   double _playbackSpeed = 1.0;
 
   PlayerState _playerState = PlayerState.stopped;
@@ -45,7 +47,7 @@ class PlaybackProvider extends ChangeNotifier {
   Duration get duration => _duration;
   Duration get position => _position;
   double get playbackSpeed => _playbackSpeed;
-  LoopMode get loopMode => _loopMode;
+  PlaybackMode get mode => _mode;
   PlayerState get playerState => _playerState;
 
   // Actions
@@ -82,18 +84,34 @@ class PlaybackProvider extends ChangeNotifier {
 
   Future<void> next() async {
     if (_playlist.isEmpty) return;
-    int nextIndex = _currentIndex + 1;
-    if (nextIndex >= _playlist.length) {
-      nextIndex = 0; // Loop back
+    int nextIndex;
+
+    if (_mode == PlaybackMode.shuffle) {
+      nextIndex = _random.nextInt(_playlist.length);
+      // Try to avoid playing the same track again if there are multiple
+      if (nextIndex == _currentIndex && _playlist.length > 1) {
+        nextIndex = (nextIndex + 1) % _playlist.length;
+      }
+    } else {
+      nextIndex = _currentIndex + 1;
+      if (nextIndex >= _playlist.length) {
+        nextIndex = 0; // Loop back
+      }
     }
     await playAtIndex(nextIndex);
   }
 
   Future<void> previous() async {
     if (_playlist.isEmpty) return;
-    int prevIndex = _currentIndex - 1;
-    if (prevIndex < 0) {
-      prevIndex = _playlist.length - 1;
+    int prevIndex;
+
+    if (_mode == PlaybackMode.shuffle) {
+      prevIndex = _random.nextInt(_playlist.length);
+    } else {
+      prevIndex = _currentIndex - 1;
+      if (prevIndex < 0) {
+        prevIndex = _playlist.length - 1;
+      }
     }
     await playAtIndex(prevIndex);
   }
@@ -108,24 +126,34 @@ class PlaybackProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setLoopMode(LoopMode mode) {
-    _loopMode = mode;
+  void setPlaybackMode(PlaybackMode newMode) {
+    _mode = newMode;
     notifyListeners();
   }
 
-  void toggleLoopMode() {
-    _loopMode = LoopMode.values[(_loopMode.index + 1) % LoopMode.values.length];
+  void togglePlaybackMode() {
+    _mode = PlaybackMode.values[(_mode.index + 1) % PlaybackMode.values.length];
     notifyListeners();
   }
 
   void _handleTrackComplete() {
-    if (_loopMode == LoopMode.single) {
-      playAtIndex(_currentIndex);
-    } else if (_loopMode == LoopMode.all ||
-        _currentIndex < _playlist.length - 1) {
-      next();
-    } else {
-      _player.stop();
+    switch (_mode) {
+      case PlaybackMode.single:
+        playAtIndex(_currentIndex);
+        break;
+      case PlaybackMode.shuffle:
+        next();
+        break;
+      case PlaybackMode.loop:
+        next();
+        break;
+      case PlaybackMode.order:
+        if (_currentIndex < _playlist.length - 1) {
+          next();
+        } else {
+          _player.stop();
+        }
+        break;
     }
   }
 

@@ -2813,14 +2813,18 @@ class _StudioProPlayerState extends State<StudioProPlayer>
           children: [
             IconButton(
               icon: Icon(
-                player.loopMode == LoopMode.off
-                    ? Icons.repeat_rounded
-                    : Icons.repeat_on_rounded,
-                color: player.loopMode != LoopMode.off
-                    ? const Color(0xFF22C55E)
-                    : Colors.black26,
+                player.mode == PlaybackMode.order
+                    ? Icons.trending_flat_rounded
+                    : (player.mode == PlaybackMode.single
+                          ? Icons.repeat_one_rounded
+                          : (player.mode == PlaybackMode.shuffle
+                                ? Icons.shuffle_rounded
+                                : Icons.repeat_rounded)),
+                color: player.mode == PlaybackMode.order
+                    ? Colors.black26
+                    : const Color(0xFF22C55E),
               ),
-              onPressed: player.toggleLoopMode,
+              onPressed: player.togglePlaybackMode,
             ),
             IconButton(
               icon: const Icon(
