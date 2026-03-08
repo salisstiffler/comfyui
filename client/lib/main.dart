@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -413,28 +414,6 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   late AnimationController _pulseController;
   bool _showAdvanced = false;
 
-  final List<String> _samplers = [
-    'res_multistep',
-    'euler',
-    'euler_ancestral',
-    'dpmpp_2m',
-    'k_dpm_2_ancestral',
-  ];
-
-  final Map<String, Size> _aspectRatios = {
-    '1:1': const Size(1024, 1024),
-    '2:3': const Size(832, 1216),
-    '3:2': const Size(1216, 832),
-  };
-
-  final List<String> _surprisePrompts = [
-    "A futuristic cyberpunk city with neon lights and flying cars",
-    "A calm zen garden with cherry blossoms falling",
-    "An astronaut playing chess with an alien on Mars",
-    "A majestic dragon flying over a medieval castle",
-    "A portrait of a robot with human emotions, oil painting style",
-  ];
-
   @override
   bool get wantKeepAlive => true;
 
@@ -447,6 +426,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
     )..repeat(reverse: true);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final gen = Provider.of<GeneratorProvider>(context, listen: false);
       _promptController.text = gen.prompt;
       if (gen.seed != null) _seedController.text = gen.seed.toString();
@@ -461,10 +441,59 @@ class _GeneratorScreenState extends State<GeneratorScreen>
     super.dispose();
   }
 
+  final List<String> _samplers = [
+    'res_multistep',
+    'euler',
+    'euler_ancestral',
+    'dpmpp_2m',
+    'k_dpm_2_ancestral',
+  ];
+
+  final Map<String, Size> _aspectRatios = {
+    '1:1': const Size(1024, 1024),
+    '2:3': const Size(832, 1216),
+    '3:2': const Size(1216, 832),
+  };
+
+  // --- Dynamic Inspiration Engine ---
+  final List<String> _subjects = [
+    "A cyberpunk metropolis", "A floating crystal island", "A samurai robot", 
+    "A Victorian clockwork owl", "An ancient underwater temple", "A cosmic nebula dragon", 
+    "A tiny mouse wizard", "A futuristic space station", "A surreal desert with melting clocks",
+    "A mystical forest with glowing fungi", "A steampunk airship", "A polar bear in a suit",
+    "A high-tech laboratory", "A medieval alchemist's study", "A rainy Tokyo street",
+    "A crystalline unicorn", "A marble statue of a digital deity", "A hidden oasis in space"
+  ];
+
+  final List<String> _styles = [
+    "Studio Ghibli animation style", "Unreal Engine 5 render", "Cyberpunk 2077 aesthetic",
+    "Oil painting by Van Gogh", "Hyper-realistic photography", "Minimalist 3D render",
+    "Dark fantasy illustration", "Retro-wave vaporwave style", "Ukiyo-e woodblock print",
+    "Cinematic lighting", "Pencil sketch", "Neon noir atmosphere", "Art Nouveau",
+    "Futuristic bioluminescence", "National Geographic macro photography"
+  ];
+
+  final List<String> _details = [
+    "highly detailed, 8k resolution", "volumetric lighting, soft shadows", 
+    "intricate patterns, masterpiece", "vivid colors, sharp focus", 
+    "ethereal atmosphere, cinematic fog", "extreme close-up, bokeh effect",
+    "concept art, gold leaf accents", "symmetry, ultra-detailed textures"
+  ];
+
   void _surpriseMe(GeneratorProvider gen) {
-    final p = _surprisePrompts[Random().nextInt(_surprisePrompts.length)];
-    _promptController.text = p;
-    gen.setPrompt(p);
+    final random = Random();
+    final subject = _subjects[random.nextInt(_subjects.length)];
+    final style = _styles[random.nextInt(_styles.length)];
+    final detail = _details[random.nextInt(_details.length)];
+    
+    // Randomly combine categories to create a professional prompt
+    final prompt = "$subject, $style, $detail";
+    
+    _promptController.text = prompt;
+    gen.setPrompt(prompt);
+    
+    // 震动反馈 (如果是在真机上运行)
+    HapticFeedback.lightImpact();
   }
 
   void _submit(GeneratorProvider gen) async {
