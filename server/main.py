@@ -69,6 +69,19 @@ class Job(BaseModel):
 
 HOST_BRIDGE_URL = "http://host.docker.internal:8189"
 
+@app.get("/api/health")
+async def health_check():
+    try:
+        # 尝试获取 ComfyUI 的队列状态作为连接测试
+        await comfy_request("GET", "/queue")
+        return {"status": "online", "engine": "ComfyUI"}
+    except HTTPException as e:
+        if e.status_code == 503:
+            raise HTTPException(status_code=503, detail="ComfyUI Core is offline")
+        raise e
+    except Exception:
+        raise HTTPException(status_code=503, detail="Unexpected engine error")
+
 @app.post("/api/wake")
 async def wake_engine():
     async with httpx.AsyncClient(timeout=5.0) as client:

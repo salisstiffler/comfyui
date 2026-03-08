@@ -96,6 +96,15 @@ class ApiService {
     }
   }
 
+  static Future<bool> checkHealth() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/health'));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
   static Future<bool> wakeEngine() async {
     try {
       final response = await http.post(Uri.parse('$baseUrl/api/wake'));

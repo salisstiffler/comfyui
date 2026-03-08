@@ -169,8 +169,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Future<void> _checkHealth() async {
     try {
-      await ApiService.getJobs();
-      if (mounted && !_isServerOnline) setState(() => _isServerOnline = true);
+      final isAlive = await ApiService.checkHealth();
+      if (mounted && _isServerOnline != isAlive) setState(() => _isServerOnline = isAlive);
     } catch (_) {
       if (mounted && _isServerOnline) setState(() => _isServerOnline = false);
     }
