@@ -5,6 +5,15 @@ class AiTask {
   final String? resultImageUrl;
   final DateTime timestamp; // Submission Time
   final DateTime? completedAt; // Completion Time
+  
+  // Advanced Params
+  final int steps;
+  final double cfg;
+  final int? seed;
+  final String sampler;
+  final int batchSize;
+  final int width;
+  final int height;
 
   AiTask({
     required this.promptId,
@@ -13,6 +22,13 @@ class AiTask {
     this.resultImageUrl,
     required this.timestamp,
     this.completedAt,
+    this.steps = 8,
+    this.cfg = 1.0,
+    this.seed,
+    this.sampler = 'res_multistep',
+    this.batchSize = 1,
+    this.width = 1024,
+    this.height = 1024,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +39,13 @@ class AiTask {
       'resultImageUrl': resultImageUrl,
       'timestamp': timestamp.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
+      'steps': steps,
+      'cfg': cfg,
+      'seed': seed,
+      'sampler': sampler,
+      'batchSize': batchSize,
+      'width': width,
+      'height': height,
     };
   }
 
@@ -36,6 +59,13 @@ class AiTask {
       completedAt: map['completedAt'] != null
           ? DateTime.parse(map['completedAt'])
           : null,
+      steps: map['steps'] ?? 8,
+      cfg: (map['cfg'] as num?)?.toDouble() ?? 1.0,
+      seed: map['seed'],
+      sampler: map['sampler'] ?? 'res_multistep',
+      batchSize: map['batchSize'] ?? 1,
+      width: map['width'] ?? 1024,
+      height: map['height'] ?? 1024,
     );
   }
 
@@ -51,31 +81,34 @@ class AiTask {
       resultImageUrl: resultImageUrl ?? this.resultImageUrl,
       timestamp: timestamp,
       completedAt: completedAt ?? this.completedAt,
+      steps: steps,
+      cfg: cfg,
+      seed: seed,
+      sampler: sampler,
+      batchSize: batchSize,
+      width: width,
+      height: height,
     );
   }
 
   String get durationString {
-    // If we have a recorded completion time, use it.
     if (completedAt != null) {
       final diff = completedAt!.difference(timestamp);
       return _formatDuration(diff);
     }
 
-    // If the task is in a terminal state but missing completedAt (e.g. from version upgrade),
-    // stop ticking to avoid confusion.
     if (status == 'completed' || status == 'cancelled') {
-      return '...'; // Or a fallback like 'Done'
+       return 'FIN';
     }
 
-    // Otherwise, it's still running or pending. Match against current time.
     final diff = DateTime.now().difference(timestamp);
     return _formatDuration(diff);
   }
 
   String _formatDuration(Duration d) {
-    String m = d.inMinutes.remainder(60).toString().padLeft(1, '0');
-    String s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (d.inMinutes > 0) return '${m}m ${s}s';
+    int m = d.inMinutes.remainder(60);
+    int s = d.inSeconds.remainder(60);
+    if (m > 0) return '${m}m ${s}s';
     return '${s}s';
   }
 }

@@ -1,29 +1,44 @@
-from PIL import Image, ImageDraw
-
-def create_squircle(size, radius):
-    mask = Image.new('L', (size, size), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.rounded_rectangle((0, 0, size, size), radius=radius, fill=255)
-    return mask
+from PIL import Image, ImageDraw, ImageOps
 
 def main():
-    img_path = 'assets/images/app_icon.png'
-    img = Image.open(img_path).convert('RGBA')
-    size = img.size[0]
+    source_path = 'assets/images/app_icon_src.png' 
+    output_path = 'assets/images/app_icon.png'
     
-    # 22.5% of size is a standard squircle-ish radius for app icons
-    radius = int(size * 0.225)
-    
-    mask = create_squircle(size, radius)
-    
-    output = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    output.paste(img, (0, 0), mask)
-    
-    output.save(img_path)
-    print(f"Icon successfully cropped and saved to {img_path}")
-
-if __name__ == '__main__':
     try:
-        main()
+        img = Image.open(source_path).convert('RGBA')
+        
+        # Ensure it's square and centered
+        width, height = img.size
+        size = min(width, height)
+        left = (width - size) // 2
+        top = (height - size) // 2
+        img = img.crop((left, top, left + size, top + size))
+        
+        # Add internal padding so the icon doesn't look "cramped" in the squircle
+        # Scale down the original a bit (e.g. 85%) and paste on transparent canvas
+        inner_size = int(size * 0.85)
+        img_resized = img.resize((inner_size, inner_size), Image.Resampling.LANCZOS)
+        
+        canvas = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        offset = (size - inner_size) // 2
+        canvas.paste(img_resized, (offset, offset))
+        
+        # Create a squircle mask (Apple-style smoothness)
+        mask = Image.new('L', (size, size), 0)
+        draw = ImageDraw.Draw(mask)
+        # Using a higher radius for a smoother squircle feel
+        radius = int(size * 0.25)
+        draw.rounded_rectangle((0, 0, size, size), radius=radius, fill=255)
+        
+        # Apply the mask to the clean canvas
+        final_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        final_img.paste(canvas, (0, 0), mask)
+        
+        final_img.save(output_path)
+        print(f"Icon successfully redesigned and cropped: {output_path}")
+        
     except Exception as e:
         print(f"Error: {e}")
+
+if __name__ == '__main__':
+    main()

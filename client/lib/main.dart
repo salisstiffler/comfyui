@@ -1,17 +1,107 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'services/api_service.dart';
-import 'services/storage_service.dart';
 import 'models/task_model.dart';
+
+// --- State Management ---
+class GeneratorProvider extends ChangeNotifier {
+  String prompt = "";
+  double steps = 8;
+  double cfg = 1.0;
+  String sampler = 'res_multistep';
+  double batchSize = 1;
+  String aspectRatio = '1:1';
+  int? seed;
+  bool randomSeed = true;
+
+  void updateFromTask(AiTask task) {
+    prompt = task.prompt;
+    steps = task.steps.toDouble();
+    cfg = task.cfg;
+    sampler = task.sampler;
+    batchSize = task.batchSize.toDouble();
+    seed = task.seed;
+    randomSeed = task.seed == null;
+    
+    // Determine aspect ratio from width/height
+    if (task.width == 1024 && task.height == 1024) aspectRatio = '1:1';
+    else if (task.width == 832 && task.height == 1216) aspectRatio = '2:3';
+    else if (task.width == 1216 && task.height == 832) aspectRatio = '3:2';
+    
+    notifyListeners();
+  }
+
+  void setPrompt(String p) {
+    prompt = p;
+    notifyListeners();
+  }
+
+  void setSteps(double s) {
+    steps = s;
+    notifyListeners();
+  }
+
+  void setCfg(double c) {
+    cfg = c;
+    notifyListeners();
+  }
+
+  void setSampler(String s) {
+    sampler = s;
+    notifyListeners();
+  }
+
+  void setBatchSize(double b) {
+    batchSize = b;
+    notifyListeners();
+  }
+
+  void setAspectRatio(String a) {
+    aspectRatio = a;
+    notifyListeners();
+  }
+
+  void setSeed(int? s) {
+    seed = s;
+    notifyListeners();
+  }
+
+  void setRandomSeed(bool r) {
+    randomSeed = r;
+    notifyListeners();
+  }
+}
+
+class NavigationProvider extends ChangeNotifier {
+  int selectedIndex = 0;
+  final PageController pageController = PageController();
+
+  void setIndex(int index) {
+    selectedIndex = index;
+    pageController.jumpToPage(index);
+    notifyListeners();
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => GeneratorProvider()),
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -19,8 +109,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Pro Max Design System Tokens
-    const primarySlate = Color(0xFF1E293B);
     const accentEmerald = Color(0xFF22C55E);
     const bgSpace = Color(0xFF0F172A);
     const textGhost = Color(0xFFF8FAFC);
@@ -35,9 +123,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: accentEmerald,
           primary: accentEmerald,
-          secondary: primarySlate,
           surface: const Color(0xFF1E293B),
-          background: bgSpace,
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
@@ -61,51 +147,191 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _selectedIndex = 0;
-  final PageController _pageController = PageController();
+  bool _isServerOnline = false;
+  Timer? _healthCheckTimer;
+  String _username = "Agent";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+    _checkHealth();
+    _healthCheckTimer =
+        Timer.periodic(const Duration(seconds: 10), (_) => _checkHealth());
+  }
+
+  Future<void> _loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _username = prefs.getString('username') ?? "Agent";
+      ApiService.userId = _username;
+    });
+  }
+
+  Future<void> _checkHealth() async {
+    try {
+      await ApiService.getJobs();
+      if (mounted && !_isServerOnline) setState(() => _isServerOnline = true);
+    } catch (_) {
+      if (mounted && _isServerOnline) setState(() => _isServerOnline = false);
+    }
+  }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _healthCheckTimer?.cancel();
     super.dispose();
-  }
-
-  void _onItemTapped(int index) {
-    setState(() => _selectedIndex = index);
-    _pageController.jumpToPage(index);
   }
 
   @override
   Widget build(BuildContext context) {
+    final nav = Provider.of<NavigationProvider>(context);
+
     return Scaffold(
       body: Stack(
         children: [
-          // Global Silk Background
           Positioned.fill(
             child: Opacity(
               opacity: 0.4,
               child: Image.asset(
                 'assets/images/bg_texture.png',
                 fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(color: Colors.black),
               ),
             ),
           ),
-          PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: const [
-              GeneratorScreen(),
-              MonitorScreen(),
-              LibraryScreen(),
-            ],
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: PageView(
+                    controller: nav.pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: const [
+                      GeneratorScreen(),
+                      MonitorScreen(),
+                      LibraryScreen(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      bottomNavigationBar: _buildGlassNavbar(),
+      bottomNavigationBar: _buildGlassNavbar(nav),
     );
   }
 
-  Widget _buildGlassNavbar() {
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color:
+                      _isServerOnline ? const Color(0xFF22C55E) : Colors.red,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          (_isServerOnline
+                                  ? const Color(0xFF22C55E)
+                                  : Colors.red)
+                              .withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _isServerOnline ? 'SYSTEM ONLINE' : 'OFFLINE',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                  color: Colors.white54,
+                ),
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: () => _showProfileDialog(context),
+            child: Row(
+              children: [
+                Text(
+                  _username.toUpperCase(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const CircleAvatar(
+                  radius: 14,
+                  backgroundColor: Colors.white10,
+                  child: Icon(Icons.person, size: 16, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showProfileDialog(BuildContext context) {
+    final controller = TextEditingController(text: _username);
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF0F172A),
+            title: const Text('IDENTITY'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'CODENAME',
+                filled: true,
+                fillColor: Colors.white10,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CANCEL'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('username', controller.text);
+                  ApiService.userId = controller.text;
+                  if (mounted)
+                    setState(() {
+                      _username = controller.text;
+                    });
+                  Navigator.pop(ctx);
+                },
+                child: const Text(
+                  'SAVE',
+                  style: TextStyle(color: Color(0xFF22C55E)),
+                ),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildGlassNavbar(NavigationProvider nav) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A).withOpacity(0.8),
@@ -115,8 +341,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: NavigationBar(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _onItemTapped,
+            selectedIndex: nav.selectedIndex,
+            onDestinationSelected: nav.setIndex,
             backgroundColor: Colors.transparent,
             elevation: 0,
             indicatorColor: const Color(0xFF22C55E).withOpacity(0.2),
@@ -125,17 +351,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               NavigationDestination(
                 icon: Icon(Icons.bolt_outlined),
                 selectedIcon: Icon(Icons.bolt),
-                label: 'Ignite',
+                label: 'IGNITE',
               ),
               NavigationDestination(
                 icon: Icon(Icons.terminal_outlined),
                 selectedIcon: Icon(Icons.terminal),
-                label: 'Engine',
+                label: 'LOGS',
               ),
               NavigationDestination(
                 icon: Icon(Icons.grid_view_outlined),
                 selectedIcon: Icon(Icons.grid_view),
-                label: 'Vault',
+                label: 'VAULT',
               ),
             ],
           ),
@@ -145,7 +371,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-// --- Generator Screen (Pro Max Edition) ---
+// --- Generator Screen ---
 class GeneratorScreen extends StatefulWidget {
   const GeneratorScreen({super.key});
 
@@ -156,8 +382,32 @@ class GeneratorScreen extends StatefulWidget {
 class _GeneratorScreenState extends State<GeneratorScreen>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   final TextEditingController _promptController = TextEditingController();
+  final TextEditingController _seedController = TextEditingController();
   bool _isSubmitting = false;
   late AnimationController _pulseController;
+  bool _showAdvanced = false;
+
+  final List<String> _samplers = [
+    'res_multistep',
+    'euler',
+    'euler_ancestral',
+    'dpmpp_2m',
+    'k_dpm_2_ancestral',
+  ];
+
+  final Map<String, Size> _aspectRatios = {
+    '1:1': const Size(1024, 1024),
+    '2:3': const Size(832, 1216),
+    '3:2': const Size(1216, 832),
+  };
+
+  final List<String> _surprisePrompts = [
+    "A futuristic cyberpunk city with neon lights and flying cars",
+    "A calm zen garden with cherry blossoms falling",
+    "An astronaut playing chess with an alien on Mars",
+    "A majestic dragon flying over a medieval castle",
+    "A portrait of a robot with human emotions, oil painting style",
+  ];
 
   @override
   bool get wantKeepAlive => true;
@@ -169,45 +419,64 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat(reverse: true);
+    
+    // Initialize controllers with provider values
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final gen = Provider.of<GeneratorProvider>(context, listen: false);
+      _promptController.text = gen.prompt;
+      if (gen.seed != null) _seedController.text = gen.seed.toString();
+    });
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     _promptController.dispose();
+    _seedController.dispose();
     super.dispose();
   }
 
-  void _submit() async {
+  void _surpriseMe(GeneratorProvider gen) {
+    final p = _surprisePrompts[Random().nextInt(_surprisePrompts.length)];
+    _promptController.text = p;
+    gen.setPrompt(p);
+  }
+
+  void _submit(GeneratorProvider gen) async {
     final pr = _promptController.text.trim();
     if (pr.isEmpty) return;
     setState(() => _isSubmitting = true);
     try {
-      final pid = await ApiService.generateImage(pr);
-      if (pid != null) {
-        await StorageService.saveTask(
-          AiTask(
-            promptId: pid,
-            prompt: pr,
-            status: 'pending',
-            timestamp: DateTime.now(),
+      final size = _aspectRatios[gen.aspectRatio]!;
+      int? seedVal;
+      if (!gen.randomSeed && _seedController.text.isNotEmpty) {
+        seedVal = int.tryParse(_seedController.text);
+      }
+
+      final pid = await ApiService.generateImage(
+        pr,
+        steps: gen.steps.toInt(),
+        cfg: gen.cfg,
+        seed: seedVal,
+        sampler: gen.sampler,
+        batchSize: gen.batchSize.toInt(),
+        width: size.width.toInt(),
+        height: size.height.toInt(),
+      );
+
+      if (pid != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('COMMAND RECEIVED BY ENGINE'),
+            backgroundColor: Color(0xFF22C55E),
           ),
         );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('COMMAND RECEIVED BY ENGINE'),
-              backgroundColor: Color(0xFF22C55E),
-            ),
-          );
-          _promptController.clear();
-        }
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('LINK ERROR: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('LINK ERROR: $e')),
+        );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -216,22 +485,35 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildPrismIcon(),
-              const SizedBox(height: 48),
-              _buildTitle(),
-              const SizedBox(height: 64),
-              _buildBentoInput(),
-              const SizedBox(height: 48),
-              _buildIgniteButton(),
-            ],
-          ),
+    final gen = Provider.of<GeneratorProvider>(context);
+    
+    // Sync text controllers if provider changes from outside (e.g. Refine)
+    if (_promptController.text != gen.prompt) {
+       _promptController.text = gen.prompt;
+    }
+    if (!gen.randomSeed && gen.seed != null && _seedController.text != gen.seed.toString()) {
+       _seedController.text = gen.seed.toString();
+    } else if (gen.randomSeed) {
+       _seedController.clear();
+    }
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildPrismIcon(),
+            const SizedBox(height: 32),
+            _buildTitle(),
+            const SizedBox(height: 48),
+            _buildPromptInput(gen),
+            const SizedBox(height: 16),
+            _buildAdvancedToggle(),
+            if (_showAdvanced) _buildAdvancedControls(gen),
+            const SizedBox(height: 32),
+            _buildIgniteButton(gen),
+          ],
         ),
       ),
     );
@@ -242,25 +524,23 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       animation: _pulseController,
       builder: (context, child) {
         return Container(
-          width: 140,
-          height: 140,
-          clipBehavior: Clip.antiAlias,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(36),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
                 color: const Color(
                   0xFF22C55E,
                 ).withOpacity(0.1 + (_pulseController.value * 0.15)),
-                blurRadius: 40 + (_pulseController.value * 20),
-                spreadRadius: 10,
+                blurRadius: 30 + (_pulseController.value * 20),
+                spreadRadius: 5,
               ),
             ],
           ),
-          child: child,
+          child: Image.asset('assets/images/app_icon.png'),
         );
       },
-      child: Image.asset('assets/images/app_icon.png'),
     );
   }
 
@@ -270,19 +550,19 @@ class _GeneratorScreenState extends State<GeneratorScreen>
         Text(
           'COMFY PRO MAX',
           style: GoogleFonts.archivo(
-            fontSize: 42,
+            fontSize: 32,
             fontWeight: FontWeight.w900,
-            letterSpacing: 4,
+            letterSpacing: 3,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Text(
           'QUANTUM IMAGE SYNTHESIZER',
           style: GoogleFonts.spaceGrotesk(
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.w500,
-            letterSpacing: 6,
+            letterSpacing: 4,
             color: const Color(0xFF22C55E).withOpacity(0.8),
           ),
         ),
@@ -290,61 +570,235 @@ class _GeneratorScreenState extends State<GeneratorScreen>
     );
   }
 
-  Widget _buildBentoInput() {
+  Widget _buildPromptInput(GeneratorProvider gen) {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B).withOpacity(0.5),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: TextField(
+      child: Column(
+        children: [
+          TextField(
             controller: _promptController,
             maxLines: 4,
-            style: GoogleFonts.spaceGrotesk(fontSize: 18, color: Colors.white),
+            onChanged: gen.setPrompt,
+            style: GoogleFonts.spaceGrotesk(fontSize: 16, color: Colors.white),
             decoration: InputDecoration(
               hintText: 'Transmit your vision...',
               hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
-              contentPadding: const EdgeInsets.all(32),
+              contentPadding: const EdgeInsets.all(24),
               border: InputBorder.none,
             ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12, bottom: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton(
+                  onPressed: () => _surpriseMe(gen),
+                  icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+                  tooltip: 'Surprise Me',
+                ),
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
 
-  Widget _buildIgniteButton() {
+  Widget _buildAdvancedToggle() {
     return GestureDetector(
-      onTap: _isSubmitting ? null : _submit,
+      onTap: () => setState(() => _showAdvanced = !_showAdvanced),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            _showAdvanced ? 'HIDE ADVANCED' : 'SHOW ADVANCED',
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.white30,
+              letterSpacing: 2,
+            ),
+          ),
+          Icon(
+            _showAdvanced ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+            color: Colors.white30,
+            size: 16,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedControls(GeneratorProvider gen) {
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.black12,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sliderRow('STEPS', gen.steps, 1, 50, gen.setSteps),
+          const SizedBox(height: 16),
+          _sliderRow('CFG SCALE', gen.cfg, 1, 20, gen.setCfg),
+          const SizedBox(height: 16),
+          _sliderRow(
+            'BATCH SIZE',
+            gen.batchSize,
+            1,
+            4,
+            gen.setBatchSize,
+            divisions: 3,
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('ASPECT RATIO'),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: gen.aspectRatio,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: GoogleFonts.spaceGrotesk(color: Colors.white),
+                      items:
+                          _aspectRatios.keys
+                              .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                              .toList(),
+                      onChanged: (v) => gen.setAspectRatio(v!),
+                      decoration: _inputDeco(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('SAMPLER'),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: gen.sampler,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: GoogleFonts.spaceGrotesk(color: Colors.white, fontSize: 12),
+                      isExpanded: true,
+                      items:
+                          _samplers
+                              .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                              .toList(),
+                      onChanged: (v) => gen.setSampler(v!),
+                      decoration: _inputDeco(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _label('SEED'),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _seedController,
+                  enabled: !gen.randomSeed,
+                  keyboardType: TextInputType.number,
+                  onChanged: (v) => gen.setSeed(int.tryParse(v)),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: _inputDeco().copyWith(hintText: 'Random'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FilterChip(
+                label: const Text('Random'),
+                selected: gen.randomSeed,
+                onSelected: gen.setRandomSeed,
+                checkmarkColor: Colors.white,
+                selectedColor: const Color(0xFF22C55E),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sliderRow(String label, double value, double min, double max, ValueChanged<double> onChanged, {int? divisions}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _label(label),
+            Text(value.toStringAsFixed(1), style: const TextStyle(color: Colors.white70)),
+          ],
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: const Color(0xFF22C55E),
+            inactiveTrackColor: Colors.white10,
+            thumbColor: Colors.white,
+            overlayColor: const Color(0xFF22C55E).withOpacity(0.2),
+          ),
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions ?? (max - min).toInt(),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _label(String text) {
+    return Text(
+      text,
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white30, letterSpacing: 1.5),
+    );
+  }
+
+  InputDecoration _inputDeco() {
+    return InputDecoration(
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.05),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
+  }
+
+  Widget _buildIgniteButton(GeneratorProvider gen) {
+    return GestureDetector(
+      onTap: _isSubmitting ? null : () => _submit(gen),
       child: Container(
-        height: 80,
+        height: 64,
         width: double.infinity,
         decoration: BoxDecoration(
           color: const Color(0xFF22C55E),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF22C55E).withOpacity(0.3),
-              blurRadius: 30,
-              offset: const Offset(0, 10),
-            ),
+            BoxShadow(color: const Color(0xFF22C55E).withOpacity(0.3), blurRadius: 30, offset: const Offset(0, 10)),
           ],
         ),
         child: Center(
           child: _isSubmitting
-              ? const CircularProgressIndicator(color: Colors.white)
+              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : Text(
                   'IGNITE ENGINE',
-                  style: GoogleFonts.archivo(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
-                    color: Colors.white,
-                  ),
+                  style: GoogleFonts.archivo(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 2, color: Colors.white),
                 ),
         ),
       ),
@@ -352,7 +806,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   }
 }
 
-// --- Monitor Screen (Bento Style) ---
+// --- Monitor Screen ---
 class MonitorScreen extends StatefulWidget {
   const MonitorScreen({super.key});
 
@@ -360,8 +814,7 @@ class MonitorScreen extends StatefulWidget {
   State<MonitorScreen> createState() => _MonitorScreenState();
 }
 
-class _MonitorScreenState extends State<MonitorScreen>
-    with AutomaticKeepAliveClientMixin {
+class _MonitorScreenState extends State<MonitorScreen> with AutomaticKeepAliveClientMixin {
   List<AiTask> _tasks = [];
   Timer? _pollTimer;
   Timer? _tickTimer;
@@ -376,8 +829,7 @@ class _MonitorScreenState extends State<MonitorScreen>
     _refresh();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted &&
-          _tasks.any((t) => t.status == 'pending' || t.status == 'running')) {
+      if (mounted && _tasks.any((t) => t.status != 'completed' && t.status != 'cancelled')) {
         setState(() {});
       }
     });
@@ -391,62 +843,22 @@ class _MonitorScreenState extends State<MonitorScreen>
   }
 
   Future<void> _refresh() async {
-    final list = await StorageService.getTasks();
+    final list = await ApiService.getJobs();
     if (!mounted) return;
     setState(() => _tasks = list);
 
-    for (int i = 0; i < _tasks.length; i++) {
-      final t = _tasks[i];
-      if (t.status == 'pending' || t.status == 'running') {
+    for (final t in _tasks) {
+      if (t.status == 'running' || t.status == 'pending' || t.status == 'queued' || t.status == 'unknown') {
         final data = await ApiService.checkStatus(t.promptId);
         if (data != null && mounted) {
-          final s = data['status'];
-          final p = (data['progress'] as num?)?.toDouble() ?? 0.0;
-          if (s != t.status) {
-            String? url;
-            DateTime? comp;
-            if (s == 'completed') {
-              comp = DateTime.now();
-              if (data['images'] != null)
-                url = ApiService.getImageUrl(data['images'].first);
-            } else if (s == 'cancelled') {
-              comp = DateTime.now();
-            }
-            await StorageService.updateTaskStatus(
-              t.promptId,
-              s,
-              imageUrl: url,
-              completedAt: comp,
-            );
-            setState(
-              () => _tasks[i] = t.copyWith(
-                status: s,
-                resultImageUrl: url,
-                completedAt: comp,
-              ),
-            );
+          if (data['status'] == 'running') {
+            setState(() {
+              _progress[t.promptId] = (data['progress'] as num?)?.toDouble() ?? 0.5;
+            });
           }
-          setState(() => _progress[t.promptId] = p);
         }
       }
     }
-  }
-
-  void _relaunch(String prompt) async {
-    try {
-      final pid = await ApiService.generateImage(prompt);
-      if (pid != null) {
-        await StorageService.saveTask(
-          AiTask(
-            promptId: pid,
-            prompt: prompt,
-            status: 'pending',
-            timestamp: DateTime.now(),
-          ),
-        );
-        _refresh();
-      }
-    } catch (_) {}
   }
 
   @override
@@ -455,27 +867,13 @@ class _MonitorScreenState extends State<MonitorScreen>
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(
-          'LOGBOOK',
-          style: GoogleFonts.archivo(
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-            letterSpacing: 3,
-          ),
-        ),
+        title: Text('LOGBOOK', style: GoogleFonts.archivo(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 3)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
+        automaticallyImplyLeading: false,
       ),
       body: _tasks.isEmpty
-          ? Center(
-              child: Text(
-                'EMPTY REGISTRY',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.1),
-                  letterSpacing: 4,
-                ),
-              ),
-            )
+          ? Center(child: Text('EMPTY REGISTRY', style: TextStyle(color: Colors.white.withOpacity(0.1), letterSpacing: 4)))
           : ListView.builder(
               padding: const EdgeInsets.all(24),
               itemCount: _tasks.length,
@@ -487,63 +885,38 @@ class _MonitorScreenState extends State<MonitorScreen>
   Widget _buildBentoCard(AiTask task) {
     final p = _progress[task.promptId] ?? 0.0;
     final isDone = task.status == 'completed';
-    final isCancelled = task.status == 'cancelled';
     final isRunning = task.status == 'running';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: const Color(0xFF1E293B).withOpacity(0.4),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isRunning
-              ? const Color(0xFF22C55E).withOpacity(0.3)
-              : Colors.white.withOpacity(0.05),
+          color: isRunning ? const Color(0xFF22C55E).withOpacity(0.3) : Colors.white.withOpacity(0.05),
         ),
       ),
       child: Theme(
         data: ThemeData.dark().copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           leading: _buildStatusPulse(task.status, p),
-          title: Text(
-            task.prompt,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          ),
+          title: Text(task.prompt, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(task.status).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    task.status.toUpperCase(),
-                    style: TextStyle(
-                      color: _getStatusColor(task.status),
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
+                _statusBadge(task.status),
                 const SizedBox(width: 12),
-                const Icon(
-                  Icons.timer_outlined,
-                  size: 12,
-                  color: Colors.white24,
-                ),
+                const Icon(Icons.timer_outlined, size: 10, color: Colors.white24),
                 const SizedBox(width: 4),
                 Text(
                   task.durationString,
+                  style: const TextStyle(fontSize: 10, color: Colors.white24),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${task.width}x${task.height} • ${task.steps}S',
                   style: const TextStyle(fontSize: 10, color: Colors.white24),
                 ),
               ],
@@ -551,93 +924,41 @@ class _MonitorScreenState extends State<MonitorScreen>
           ),
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Divider(color: Colors.white10),
-                  const SizedBox(height: 16),
-                  _meta('ENGINE_ID', task.promptId),
-                  _meta(
-                    'TIMESTAMP',
-                    task.timestamp.toString().substring(11, 19),
-                  ),
-                  if (task.completedAt != null)
-                    _meta(
-                      'COMPLETED',
-                      task.completedAt.toString().substring(11, 19),
-                    ),
-                  _meta('INPUT_PROMPT', task.prompt),
+                  const SizedBox(height: 12),
+                  _meta('PARAMS', 'CFG: ${task.cfg} • Sampler: ${task.sampler} • Seed: ${task.seed ?? "Random"}'),
                   if (isDone && task.resultImageUrl != null)
                     Padding(
-                      padding: const EdgeInsets.only(top: 20),
+                      padding: const EdgeInsets.only(top: 16),
                       child: GestureDetector(
-                        onTap: () => ResultDialog.show(
-                          context,
-                          task.resultImageUrl!,
-                          task.prompt,
-                        ),
+                        onTap: () => ResultDialog.show(context, task.resultImageUrl!, task),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: Image.network(
-                            task.resultImageUrl!,
-                            height: 180,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
+                          child: Image.network(task.resultImageUrl!, height: 180, width: double.infinity, fit: BoxFit.cover),
                         ),
                       ),
                     ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      if (isDone || isCancelled)
+                      TextButton.icon(
+                        onPressed: () {
+                           Provider.of<GeneratorProvider>(context, listen: false).updateFromTask(task);
+                           Provider.of<NavigationProvider>(context, listen: false).setIndex(0);
+                        },
+                        icon: const Icon(Icons.tune, size: 16, color: Color(0xFF22C55E)),
+                        label: const Text('REFINE', style: TextStyle(color: Color(0xFF22C55E), fontWeight: FontWeight.bold)),
+                      ),
+                      if (isRunning)
                         TextButton.icon(
-                          onPressed: () => _relaunch(task.prompt),
-                          icon: const Icon(
-                            Icons.refresh,
-                            size: 16,
-                            color: Color(0xFF22C55E),
-                          ),
-                          label: const Text(
-                            'REGENERATE',
-                            style: TextStyle(
-                              color: Color(0xFF22C55E),
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(width: 12),
-                      if (isRunning || task.status == 'pending')
-                        TextButton.icon(
-                          onPressed: () async {
-                            await ApiService.cancelTask(task.promptId);
-                            await StorageService.updateTaskStatus(
-                              task.promptId,
-                              'cancelled',
-                              completedAt: DateTime.now(),
-                            );
-                            _refresh();
-                          },
+                          onPressed: () => ApiService.cancelTask(task.promptId).then((_) => _refresh()),
                           icon: const Icon(Icons.close, size: 16),
                           label: const Text('HALT'),
-                        )
-                      else
-                        TextButton.icon(
-                          onPressed: () async {
-                            await StorageService.deleteTask(task.promptId);
-                            _refresh();
-                          },
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            size: 16,
-                            color: Colors.redAccent,
-                          ),
-                          label: const Text(
-                            'PURGE',
-                            style: TextStyle(color: Colors.redAccent),
-                          ),
                         ),
                     ],
                   ),
@@ -650,72 +971,39 @@ class _MonitorScreenState extends State<MonitorScreen>
     );
   }
 
-  Widget _buildStatusPulse(String status, double progress) {
-    final color = _getStatusColor(status);
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        if (status == 'running')
-          SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(
-              value: progress,
-              strokeWidth: 2,
-              color: color,
-            ),
-          ),
-        Icon(_getStatusIcon(status), color: color, size: 18),
-      ],
+  Widget _statusBadge(String status) {
+    Color c = Colors.grey;
+    if (status == 'completed') c = const Color(0xFF22C55E);
+    if (status == 'running') c = Colors.amber;
+    if (status == 'cancelled') c = Colors.red;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: c.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+      child: Text(status.toUpperCase(), style: TextStyle(color: c, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)),
     );
+  }
+
+  Widget _buildStatusPulse(String status, double progress) {
+    Color c = Colors.grey;
+    IconData i = Icons.access_time;
+    if (status == 'completed') { c = const Color(0xFF22C55E); i = Icons.check_circle; }
+    if (status == 'running') { c = Colors.amber; i = Icons.bolt; }
+    return Stack(alignment: Alignment.center, children: [
+      if (status == 'running') SizedBox(width: 32, height: 32, child: CircularProgressIndicator(value: progress, strokeWidth: 2, color: c)),
+      Icon(i, color: c, size: 18),
+    ]);
   }
 
   Widget _meta(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 8,
-              color: Colors.white24,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.white70,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getStatusColor(String s) {
-    if (s == 'completed') return const Color(0xFF22C55E);
-    if (s == 'cancelled') return Colors.redAccent;
-    if (s == 'running') return const Color(0xFF22C55E);
-    if (s == 'pending') return Colors.amber;
-    return Colors.grey;
-  }
-
-  IconData _getStatusIcon(String s) {
-    if (s == 'completed') return Icons.verified_user;
-    if (s == 'cancelled') return Icons.error_outline;
-    if (s == 'running') return Icons.bolt;
-    return Icons.access_time;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 8, color: Colors.white24, fontWeight: FontWeight.w900, letterSpacing: 2)),
+      const SizedBox(height: 4),
+      Text(value, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+    ]);
   }
 }
 
-// --- Library Screen (Bento Grid) ---
+// --- Library Screen ---
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
 
@@ -723,8 +1011,7 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen>
-    with AutomaticKeepAliveClientMixin {
+class _LibraryScreenState extends State<LibraryScreen> with AutomaticKeepAliveClientMixin {
   List<AiTask> _images = [];
   Timer? _sync;
 
@@ -745,10 +1032,10 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Future<void> _fetch() async {
-    final list = await StorageService.getTasks();
+    final list = await ApiService.getJobs();
     if (mounted) {
-      final res = list.where((t) => t.status == 'completed').toList();
-      if (res.length != _images.length) setState(() => _images = res);
+      final res = list.where((t) => t.status == 'completed' && t.resultImageUrl != null).toList();
+      setState(() => _images = res);
     }
   }
 
@@ -758,88 +1045,37 @@ class _LibraryScreenState extends State<LibraryScreen>
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(
-          'IMAGE VAULT',
-          style: GoogleFonts.archivo(
-            fontWeight: FontWeight.w800,
-            fontSize: 16,
-            letterSpacing: 3,
-          ),
-        ),
+        title: Text('IMAGE VAULT', style: GoogleFonts.archivo(fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 3)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
+        automaticallyImplyLeading: false,
       ),
       body: _images.isEmpty
-          ? Center(
-              child: Text(
-                'VAULT SEALED',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.1),
-                  letterSpacing: 4,
-                ),
-              ),
-            )
+          ? Center(child: Text('VAULT SEALED', style: TextStyle(color: Colors.white.withOpacity(0.1), letterSpacing: 4)))
           : GridView.builder(
               padding: const EdgeInsets.all(24),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.8,
-              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: 0.8),
               itemCount: _images.length,
               itemBuilder: (context, idx) {
                 final t = _images[idx];
                 return GestureDetector(
-                  onTap: () =>
-                      ResultDialog.show(context, t.resultImageUrl!, t.prompt),
+                  onTap: () => ResultDialog.show(context, t.resultImageUrl!, t),
                   child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 8))]),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.network(
-                            t.resultImageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                Container(color: Colors.white10),
-                          ),
+                          Image.network(t.resultImageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: Colors.white10)),
                           Positioned(
                             bottom: 0,
                             left: 0,
                             right: 0,
                             child: Container(
                               padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withOpacity(0.9),
-                                  ],
-                                ),
-                              ),
-                              child: Text(
-                                t.prompt,
-                                maxLines: 2,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.white60,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.9)])),
+                              child: Text(t.prompt, maxLines: 2, style: const TextStyle(fontSize: 10, color: Colors.white60), overflow: TextOverflow.ellipsis),
                             ),
                           ),
                         ],
@@ -853,24 +1089,20 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 }
 
-// --- Common Components ---
+// --- Result Dialog ---
 class ResultDialog extends StatelessWidget {
   final String imageUrl;
-  final String prompt;
-  const ResultDialog({super.key, required this.imageUrl, required this.prompt});
+  final AiTask task;
+  const ResultDialog({super.key, required this.imageUrl, required this.task});
 
-  static void show(BuildContext context, String url, String pr) {
+  static void show(BuildContext context, String url, AiTask t) {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
       barrierLabel: '',
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, anim1, anim2) =>
-          ResultDialog(imageUrl: url, prompt: pr),
-      transitionBuilder: (context, anim1, anim2, child) => FadeTransition(
-        opacity: anim1,
-        child: ScaleTransition(scale: anim1, child: child),
-      ),
+      pageBuilder: (context, anim1, anim2) => ResultDialog(imageUrl: url, task: t),
+      transitionBuilder: (context, anim1, anim2, child) => FadeTransition(opacity: anim1, child: ScaleTransition(scale: anim1, child: child)),
     );
   }
 
@@ -878,17 +1110,10 @@ class ResultDialog extends StatelessWidget {
     try {
       final r = await http.get(Uri.parse(imageUrl));
       final d = await getApplicationDocumentsDirectory();
-      final f = File(
-        '${d.path}/comfy_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
+      final f = File('${d.path}/comfy_${DateTime.now().millisecondsSinceEpoch}.png');
       await f.writeAsBytes(r.bodyBytes);
       if (context.mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('IMAGE STORED IN VAULT'),
-            backgroundColor: Color(0xFF22C55E),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('IMAGE STORED IN LOCAL VAULT'), backgroundColor: Color(0xFF22C55E)));
     } catch (_) {}
   }
 
@@ -900,23 +1125,43 @@ class ResultDialog extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            child: InteractiveViewer(child: Image.network(imageUrl)),
+          Stack(
+            children: [
+              ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), child: InteractiveViewer(child: Image.network(imageUrl))),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: IconButton(
+                  icon: const Icon(Icons.info_outline, color: Colors.white),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                            backgroundColor: Colors.black,
+                            title: const Text('METADATA'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Steps: ${task.steps}'),
+                                Text('CFG: ${task.cfg}'),
+                                Text('Sampler: ${task.sampler}'),
+                                Text('Seed: ${task.seed}'),
+                                Text('Size: ${task.width}x${task.height}'),
+                              ],
+                            ),
+                          ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
           Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                Text(
-                  prompt,
-                  style: const TextStyle(
-                    color: Colors.white60,
-                    fontSize: 13,
-                    height: 1.5,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
+                Text(task.prompt, style: const TextStyle(color: Colors.white60, fontSize: 13, height: 1.5), textAlign: TextAlign.center, maxLines: 3, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 24),
                 Row(
                   children: [
@@ -927,22 +1172,25 @@ class ResultDialog extends StatelessWidget {
                           backgroundColor: const Color(0xFF22C55E),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         ),
                         icon: const Icon(Icons.download),
-                        label: const Text('SAVE IMAGE'),
+                        label: const Text('SAVE'),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.white10,
-                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Provider.of<GeneratorProvider>(context, listen: false).updateFromTask(task);
+                        Provider.of<NavigationProvider>(context, listen: false).setIndex(0);
+                      },
+                      icon: const Icon(Icons.tune, color: Color(0xFF22C55E)),
+                      style: IconButton.styleFrom(backgroundColor: Colors.white10),
+                      tooltip: 'REFINE',
                     ),
+                    const SizedBox(width: 8),
+                    IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close), style: IconButton.styleFrom(backgroundColor: Colors.white10)),
                   ],
                 ),
               ],
