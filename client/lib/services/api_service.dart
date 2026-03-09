@@ -3,8 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/task_model.dart';
 
 class ApiService {
-  // Use 10.0.2.2 for Android Emulator, localhost for Windows/Web
-  // Later this can be replaced with the Cloudflare Tunnel URL
+  // Docker maps host port 8100 to container port 8000
   static String baseUrl = 'http://127.0.0.1:8100';
   static String userId = 'guest';
 
@@ -45,8 +44,9 @@ class ApiService {
   }
 
   static Future<String?> generateMusic({
-    required String tags,
-    required String lyrics,
+    String? tags,
+    String? lyrics,
+    String? prompt,
     int bpm = 120,
     int duration = 120,
     int? seed,
@@ -60,6 +60,7 @@ class ApiService {
         body: jsonEncode({
           'tags': tags,
           'lyrics': lyrics,
+          'prompt': prompt,
           'bpm': bpm,
           'duration': duration,
           'seed': seed,
@@ -88,11 +89,29 @@ class ApiService {
       if (response.statusCode == 200) {
         final List list = jsonDecode(response.body);
         return list.map((item) {
-          final params = item['params'] ?? {};
-          final images = item['images'] as List? ?? [];
-          final audioFiles = item['audio_files'] as List? ?? [];
-          final compAtVal = item['completed_at'];
+          // Parse JSON strings from database if necessary
+          Map<String, dynamic> params = {};
+          if (item['params'] != null && item['params'] is String) {
+            try { params = jsonDecode(item['params']); } catch (_) {}
+          } else if (item['params'] is Map) {
+            params = item['params'];
+          }
 
+          List images = [];
+          if (item['images'] != null && item['images'] is String) {
+            try { images = jsonDecode(item['images']); } catch (_) {}
+          } else if (item['images'] is List) {
+            images = item['images'];
+          }
+
+          List audioFiles = [];
+          if (item['audio_files'] != null && item['audio_files'] is String) {
+            try { audioFiles = jsonDecode(item['audio_files']); } catch (_) {}
+          } else if (item['audio_files'] is List) {
+            audioFiles = item['audio_files'];
+          }
+
+          final compAtVal = item['completed_at'];
           DateTime? compAt;
           if (compAtVal != null) {
             compAt = DateTime.fromMillisecondsSinceEpoch(
@@ -101,11 +120,11 @@ class ApiService {
           }
 
           return AiTask(
-            promptId: item['prompt_id'],
-            prompt: item['prompt'],
-            status: item['status'],
+            promptId: item['prompt_id'] ?? '',
+            prompt: item['prompt'] ?? '',
+            status: item['status'] ?? 'queued',
             timestamp: DateTime.fromMillisecondsSinceEpoch(
-              ((item['timestamp'] as num) * 1000).toInt(),
+              (((item['timestamp'] as num?) ?? 0) * 1000).toInt(),
             ),
             completedAt: compAt,
             type: item['type'] ?? 'image',
@@ -126,6 +145,7 @@ class ApiService {
             batchSize: params['batch_size'] ?? 1,
             width: params['width'] ?? 1024,
             height: params['height'] ?? 1024,
+            workflowMode: params['mode'],
           );
         }).toList();
       }
@@ -173,7 +193,8 @@ class ApiService {
   static Future<bool> cancelTask(String promptId) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/api/queue/$promptId'),
+        Uri.parse('$baseUrl/api/jobs/$promptId'),
+        headers: {'X-User-ID': userId},
       );
       return response.statusCode == 200;
     } catch (e) {

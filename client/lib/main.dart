@@ -65,15 +65,86 @@ class NavigationProvider extends ChangeNotifier {
   }
 }
 
+class TaskProvider extends ChangeNotifier {
+  List<AiTask> tasks = [];
+  Map<String, double> progress = {};
+  Timer? _timer;
+  bool isLoading = true;
+
+  TaskProvider() {
+    startPolling();
+  }
+
+  void startPolling() {
+    refresh();
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) => refresh());
+  }
+
+  Future<void> refresh() async {
+    final list = await ApiService.getJobs();
+    bool changed = tasks.length != list.length;
+    
+    // Check if any active task needs status update
+    for (int i = 0; i < list.length; i++) {
+      final t = list[i];
+      if (t.status == 'running' || t.status == 'pending' || t.status == 'queued') {
+        final data = await ApiService.checkStatus(t.promptId);
+        if (data != null) {
+          final newStatus = data['status'] ?? t.status;
+          if (newStatus == 'running') {
+            progress[t.promptId] = (data['progress'] as num?)?.toDouble() ?? 0.5;
+          }
+          
+          // If status changed to something final, we'll need to update the task in the list
+          if (newStatus != t.status) {
+            // Re-fetch jobs to get the updated DB state (including new images/audio)
+            final updatedList = await ApiService.getJobs();
+            tasks = updatedList;
+            notifyListeners();
+            return; // Exit and wait for next tick or let the update take over
+          }
+        }
+      }
+    }
+
+    tasks = list;
+    isLoading = false;
+    notifyListeners();
+  }
+
+  void removeTask(String pid) {
+    tasks.removeWhere((t) => t.promptId == pid);
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+
 class MusicGeneratorProvider extends ChangeNotifier {
+  String prompt = "";
   String tags = "acoustic ballad, indie pop, soothing melancholy";
   String lyrics =
       "[intro]\n(Piano intro)\n[verse]\nRain falls softly on the glass...";
+  bool isSimpleMode = true;
   int bpm = 190;
   int duration = 120;
   double cfg = 2.0;
   int? seed;
   bool randomSeed = true;
+
+  void setPrompt(String p) {
+    prompt = p;
+    notifyListeners();
+  }
+
+  void setIsSimpleMode(bool s) {
+    isSimpleMode = s;
+    notifyListeners();
+  }
 
   void setTags(String t) {
     tags = t;
@@ -120,6 +191,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => NavigationProvider()),
         ChangeNotifierProvider(create: (_) => MusicGeneratorProvider()),
         ChangeNotifierProvider(create: (_) => PlaybackProvider()),
+        ChangeNotifierProvider(create: (_) => TaskProvider()),
       ],
       child: const MyApp(),
     ),
@@ -453,6 +525,7 @@ class MusicGeneratorScreen extends StatefulWidget {
 
 class _MusicGeneratorScreenState extends State<MusicGeneratorScreen>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  final TextEditingController _promptController = TextEditingController();
   final TextEditingController _tagsController = TextEditingController();
   final TextEditingController _lyricsController = TextEditingController();
   final TextEditingController _seedController = TextEditingController();
@@ -468,6 +541,7 @@ class _MusicGeneratorScreenState extends State<MusicGeneratorScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final gen = Provider.of<MusicGeneratorProvider>(context, listen: false);
+      _promptController.text = gen.prompt;
       _tagsController.text = gen.tags;
       _lyricsController.text = gen.lyrics;
       if (gen.seed != null) _seedController.text = gen.seed.toString();
@@ -475,12 +549,19 @@ class _MusicGeneratorScreenState extends State<MusicGeneratorScreen>
   }
 
   void _submit(MusicGeneratorProvider gen) async {
-    if (_tagsController.text.trim().isEmpty) return;
+    if (gen.isSimpleMode) {
+      if (_promptController.text.trim().isEmpty) return;
+    } else {
+      if (_tagsController.text.trim().isEmpty &&
+          _lyricsController.text.trim().isEmpty) return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final pid = await ApiService.generateMusic(
-        tags: _tagsController.text.trim(),
-        lyrics: _lyricsController.text.trim(),
+        prompt: gen.isSimpleMode ? _promptController.text.trim() : null,
+        tags: gen.isSimpleMode ? null : _tagsController.text.trim(),
+        lyrics: gen.isSimpleMode ? null : _lyricsController.text.trim(),
         bpm: gen.bpm,
         duration: gen.duration,
         steps: 8,
@@ -536,20 +617,51 @@ class _MusicGeneratorScreenState extends State<MusicGeneratorScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 40),
-            _buildGlassInput(
-              'TAGS (GENRE / VIBE)',
-              _tagsController,
-              2,
-              'lo-fi, chill, melancholic piano...',
+            const SizedBox(height: 32),
+            // Mode Toggle
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  _modeButton('SIMPLE', gen.isSimpleMode, () {
+                    gen.setIsSimpleMode(true);
+                  }),
+                  _modeButton('ADVANCED', !gen.isSimpleMode, () {
+                    gen.setIsSimpleMode(false);
+                  }),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            _buildGlassInput(
-              'LYRICS',
-              _lyricsController,
-              6,
-              '[verse]\nEnter lyrics...',
-            ),
+            const SizedBox(height: 32),
+            if (gen.isSimpleMode)
+              _buildGlassInput(
+                'WHAT KIND OF MUSIC?',
+                _promptController,
+                4,
+                'e.g. A melancholic piano ballad about a rainy night in Tokyo...',
+                onChanged: gen.setPrompt,
+              )
+            else ...[
+              _buildGlassInput(
+                'TAGS (GENRE / VIBE)',
+                _tagsController,
+                2,
+                'lo-fi, chill, melancholic piano...',
+                onChanged: gen.setTags,
+              ),
+              const SizedBox(height: 16),
+              _buildGlassInput(
+                'LYRICS',
+                _lyricsController,
+                6,
+                '[verse]\nEnter lyrics...',
+                onChanged: gen.setLyrics,
+              ),
+            ],
             const SizedBox(height: 16),
             GestureDetector(
               onTap: () => setState(() => _showAdvanced = !_showAdvanced),
@@ -584,12 +696,39 @@ class _MusicGeneratorScreenState extends State<MusicGeneratorScreen>
     );
   }
 
+  Widget _modeButton(String label, bool active, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF22C55E) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: active ? Colors.white : Colors.white30,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGlassInput(
     String label,
     TextEditingController controller,
     int lines,
-    String hint,
-  ) {
+    String hint, {
+    ValueChanged<String>? onChanged,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -612,6 +751,7 @@ class _MusicGeneratorScreenState extends State<MusicGeneratorScreen>
           child: TextField(
             controller: controller,
             maxLines: lines,
+            onChanged: onChanged,
             style: GoogleFonts.spaceGrotesk(),
             decoration: InputDecoration(
               hintText: hint,
@@ -1317,40 +1457,15 @@ class MonitorScreen extends StatefulWidget {
 
 class _MonitorScreenState extends State<MonitorScreen>
     with AutomaticKeepAliveClientMixin {
-  Map<String, List<AiTask>> _groupedTasks = {};
-  Timer? _pollTimer;
-  Timer? _tickTimer;
-  Map<String, double> _progress = {};
-
   @override
   bool get wantKeepAlive => true;
 
   @override
-  void initState() {
-    super.initState();
-    _refresh();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
-    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted &&
-          _groupedTasks.values.any(
-            (list) => list.any(
-              (t) => t.status != 'completed' && t.status != 'cancelled',
-            ),
-          ))
-        setState(() {});
-    });
-  }
+  Widget build(BuildContext context) {
+    super.build(context);
+    final taskProv = Provider.of<TaskProvider>(context);
+    final list = taskProv.tasks;
 
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    _tickTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _refresh() async {
-    final list = await ApiService.getJobs();
-    if (!mounted) return;
     list.sort((a, b) {
       if (a.status == 'running' || a.status == 'pending') return -1;
       if (b.status == 'running' || b.status == 'pending') return 1;
@@ -1358,7 +1473,8 @@ class _MonitorScreenState extends State<MonitorScreen>
         a.completedAt ?? a.timestamp,
       );
     });
-    final Map<String, List<AiTask>> groups = {};
+
+    final Map<String, List<AiTask>> groupedTasks = {};
     for (var t in list) {
       final dateStr =
           (t.status == 'running' ||
@@ -1366,27 +1482,11 @@ class _MonitorScreenState extends State<MonitorScreen>
               t.status == 'queued')
           ? "ACTIVE TASKS"
           : DateFormat('yyyy年MM月dd日').format(t.completedAt ?? t.timestamp);
-      groups.putIfAbsent(dateStr, () => []).add(t);
+      groupedTasks.putIfAbsent(dateStr, () => []).add(t);
     }
-    setState(() => _groupedTasks = groups);
-    for (final t in list) {
-      if (t.status == 'running' ||
-          t.status == 'pending' ||
-          t.status == 'queued') {
-        final data = await ApiService.checkStatus(t.promptId);
-        if (data != null && mounted && data['status'] == 'running')
-          setState(
-            () => _progress[t.promptId] =
-                (data['progress'] as num?)?.toDouble() ?? 0.5,
-          );
-      }
-    }
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final keys = _groupedTasks.keys.toList();
+    final keys = groupedTasks.keys.toList();
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: CustomScrollView(
@@ -1405,7 +1505,7 @@ class _MonitorScreenState extends State<MonitorScreen>
             centerTitle: true,
             automaticallyImplyLeading: false,
           ),
-          if (keys.isEmpty)
+          if (keys.isEmpty && !taskProv.isLoading)
             SliverFillRemaining(
               child: Center(
                 child: Text(
@@ -1417,42 +1517,50 @@ class _MonitorScreenState extends State<MonitorScreen>
                 ),
               ),
             )
-          else
-            for (var date in keys) ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                  child: Text(
-                    date,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      letterSpacing: 1,
-                      color: date == "ACTIVE TASKS"
-                          ? const Color(0xFF22C55E)
-                          : Colors.white38,
+          else ...[
+            if (taskProv.isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              for (var date in keys) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                    child: Text(
+                      date,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1,
+                        color: date == "ACTIVE TASKS"
+                            ? const Color(0xFF22C55E)
+                            : Colors.white38,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) =>
-                        _buildBentoCard(_groupedTasks[date]![index]),
-                    childCount: _groupedTasks[date]!.length,
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildBentoCard(
+                        groupedTasks[date]![index],
+                        taskProv,
+                      ),
+                      childCount: groupedTasks[date]!.length,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+          ],
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
   }
 
-  Widget _buildBentoCard(AiTask task) {
+  Widget _buildBentoCard(AiTask task, TaskProvider taskProv) {
     final isRunning = task.status == 'running';
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1471,7 +1579,7 @@ class _MonitorScreenState extends State<MonitorScreen>
           tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           leading: _buildStatusPulse(
             task.status,
-            _progress[task.promptId] ?? 0.0,
+            taskProv.progress[task.promptId] ?? 0.0,
           ),
           title: Text(
             task.prompt,
@@ -1485,6 +1593,10 @@ class _MonitorScreenState extends State<MonitorScreen>
               children: [
                 _statusBadge(task.status),
                 const SizedBox(width: 12),
+                if (task.isMusic && task.workflowMode != null) ...[
+                  _modeBadge(task.workflowMode!),
+                  const SizedBox(width: 8),
+                ],
                 Icon(
                   task.isMusic ? Icons.music_note : Icons.timer_outlined,
                   size: 10,
@@ -1492,7 +1604,7 @@ class _MonitorScreenState extends State<MonitorScreen>
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  task.isMusic ? 'AUDIO COMPOSITION' : task.durationString,
+                  task.isMusic ? 'AUDIO' : task.durationString,
                   style: const TextStyle(fontSize: 10, color: Colors.white24),
                 ),
                 if (!task.isMusic) ...[
@@ -1513,6 +1625,13 @@ class _MonitorScreenState extends State<MonitorScreen>
                 children: [
                   const Divider(color: Colors.white10),
                   const SizedBox(height: 12),
+                  if (task.resultFilename != null) ...[
+                    _meta(
+                      'FILE NAME',
+                      task.resultFilename!.split('/').last,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   _meta(
                     'TECHNICAL SPECS',
                     'CFG: ${task.cfg} • Sampler: ${task.sampler} • Seed: ${task.seed ?? "Auto"}',
@@ -1522,8 +1641,16 @@ class _MonitorScreenState extends State<MonitorScreen>
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
                         child: GestureDetector(
-                          onTap: () =>
-                              FullScreenGallery.show(context, [task], 0),
+                          onTap: () => FullScreenGallery.show(
+                            context,
+                            taskProv.tasks
+                                .where((t) => !t.isMusic && t.status == 'completed')
+                                .toList(),
+                            taskProv.tasks
+                                .where((t) => !t.isMusic && t.status == 'completed')
+                                .toList()
+                                .indexOf(task),
+                          ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: Image.network(
@@ -1607,14 +1734,16 @@ class _MonitorScreenState extends State<MonitorScreen>
                           ),
                         ),
                       ),
-                      if (isRunning)
-                        TextButton.icon(
-                          onPressed: () => ApiService.cancelTask(
-                            task.promptId,
-                          ).then((_) => _refresh()),
-                          icon: const Icon(Icons.close, size: 16),
-                          label: const Text('ABORT'),
+                      IconButton(
+                        onPressed: () => ApiService.cancelTask(task.promptId)
+                            .then((_) => taskProv.refresh()),
+                        icon: Icon(
+                          isRunning ? Icons.close : Icons.delete_outline,
+                          size: 18,
+                          color: Colors.white30,
                         ),
+                        tooltip: isRunning ? 'ABORT' : 'DELETE',
+                      ),
                     ],
                   ),
                 ],
@@ -1631,7 +1760,9 @@ class _MonitorScreenState extends State<MonitorScreen>
         ? const Color(0xFF22C55E)
         : (status == 'running'
               ? Colors.amber
-              : (status == 'cancelled' ? Colors.red : Colors.grey));
+              : (status == 'cancelled' || status == 'failed'
+                  ? Colors.red
+                  : Colors.grey));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -1650,13 +1781,33 @@ class _MonitorScreenState extends State<MonitorScreen>
     );
   }
 
+  Widget _modeBadge(String mode) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Text(
+        mode,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 7,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatusPulse(String status, double progress) {
     Color c = status == 'completed'
         ? const Color(0xFF22C55E)
-        : (status == 'running' ? Colors.amber : Colors.grey);
+        : (status == 'running' ? Colors.amber : (status == 'failed' ? Colors.red : Colors.grey));
     IconData i = status == 'completed'
         ? Icons.check_circle_outline
-        : (status == 'running' ? Icons.sync : Icons.access_time);
+        : (status == 'running' ? Icons.sync : (status == 'failed' ? Icons.error_outline : Icons.access_time));
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -1702,36 +1853,17 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with AutomaticKeepAliveClientMixin {
-  List<AiTask> _tasks = [];
-  bool _isLoading = true;
   String _activeTab = "IMAGES";
 
   @override
   bool get wantKeepAlive => true;
 
   @override
-  void initState() {
-    super.initState();
-    _fetch();
-  }
-
-  Future<void> _fetch() async {
-    try {
-      final tasks = await ApiService.getJobs();
-      if (mounted)
-        setState(() {
-          _tasks = tasks;
-          _isLoading = false;
-        });
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     super.build(context);
-    final filtered = _tasks.where((t) {
+    final taskProv = Provider.of<TaskProvider>(context);
+    
+    final filtered = taskProv.tasks.where((t) {
       if (t.status != 'completed') return false;
       if (_activeTab == "IMAGES") {
         return !t.isMusic && t.resultImageUrl != null;
@@ -1739,6 +1871,9 @@ class _LibraryScreenState extends State<LibraryScreen>
         return t.isMusic && t.resultAudioUrl != null;
       }
     }).toList();
+
+    // Sort by timestamp descending (newest first)
+    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     return Column(
       children: [
@@ -1754,7 +1889,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           ),
         ),
         Expanded(
-          child: _isLoading
+          child: taskProv.isLoading
               ? const Center(child: CircularProgressIndicator())
               : filtered.isEmpty
               ? Center(
@@ -1813,7 +1948,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      task.resultFilename ?? 'UNTITLED',
+                                      (task.resultFilename?.split('/').last) ?? 'UNTITLED',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -1877,7 +2012,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          task.resultFilename ?? 'AUDIO_FILE',
+                                          (task.resultFilename?.split('/').last) ?? 'AUDIO_FILE',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: const TextStyle(

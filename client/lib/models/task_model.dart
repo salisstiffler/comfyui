@@ -18,6 +18,7 @@ class AiTask {
   final int batchSize;
   final int width;
   final int height;
+  final String? workflowMode; // 'SIMPLE' or 'ADVANCED'
 
   AiTask({
     required this.promptId,
@@ -37,6 +38,7 @@ class AiTask {
     this.batchSize = 1,
     this.width = 1024,
     this.height = 1024,
+    this.workflowMode,
   });
 
   bool get isMusic => type == 'music';

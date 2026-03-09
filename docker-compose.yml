@@ -3,7 +3,7 @@ services:
     build: ./server
     container_name: comfy-ai-api
     ports:
-      - "8100:8000"
+      - "8100:8100"
     environment:
       - COMFYUI_SERVER=host.docker.internal:8188
     extra_hosts:
