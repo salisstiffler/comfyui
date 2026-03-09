@@ -80,6 +80,50 @@ class ApiService {
     }
   }
 
+  static Future<String?> uploadImage(List<int> bytes, String filename) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/upload'));
+      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final resBody = await response.stream.bytesToString();
+        return jsonDecode(resBody)['filename'];
+      }
+      return null;
+    } catch (e) {
+      print('Upload Error: $e');
+      return null;
+    }
+  }
+
+  static Future<String?> generateEdit({
+    required String prompt,
+    required String image,
+    double denoise = 1.0,
+    int steps = 4,
+    int? seed,
+  }) async {
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/generate/edit'));
+      request.headers['X-User-ID'] = userId;
+      request.fields['prompt'] = prompt;
+      request.fields['image'] = image;
+      request.fields['denoise'] = denoise.toString();
+      request.fields['steps'] = steps.toString();
+      if (seed != null) request.fields['seed'] = seed.toString();
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final resBody = await response.stream.bytesToString();
+        return jsonDecode(resBody)['prompt_id'];
+      }
+      return null;
+    } catch (e) {
+      print('Edit Error: $e');
+      return null;
+    }
+  }
+
   static Future<List<AiTask>> getJobs() async {
     try {
       final response = await http.get(
