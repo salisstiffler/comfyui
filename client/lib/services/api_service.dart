@@ -34,7 +34,9 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['prompt_id'];
+        if (data != null && data is Map) {
+          return data['prompt_id'];
+        }
       }
       return null;
     } catch (e) {
@@ -82,8 +84,13 @@ class ApiService {
 
   static Future<String?> uploadImage(List<int> bytes, String filename) async {
     try {
-      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/upload'));
-      request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/upload'),
+      );
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: filename),
+      );
       final response = await request.send();
       if (response.statusCode == 200) {
         final resBody = await response.stream.bytesToString();
@@ -104,7 +111,10 @@ class ApiService {
     int? seed,
   }) async {
     try {
-      final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/api/generate/edit'));
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/generate/edit'),
+      );
       request.headers['X-User-ID'] = userId;
       request.fields['prompt'] = prompt;
       request.fields['image'] = image;
@@ -136,21 +146,27 @@ class ApiService {
           // Parse JSON strings from database if necessary
           Map<String, dynamic> params = {};
           if (item['params'] != null && item['params'] is String) {
-            try { params = jsonDecode(item['params']); } catch (_) {}
+            try {
+              params = jsonDecode(item['params']);
+            } catch (_) {}
           } else if (item['params'] is Map) {
             params = item['params'];
           }
 
           List images = [];
           if (item['images'] != null && item['images'] is String) {
-            try { images = jsonDecode(item['images']); } catch (_) {}
+            try {
+              images = jsonDecode(item['images']);
+            } catch (_) {}
           } else if (item['images'] is List) {
             images = item['images'];
           }
 
           List audioFiles = [];
           if (item['audio_files'] != null && item['audio_files'] is String) {
-            try { audioFiles = jsonDecode(item['audio_files']); } catch (_) {}
+            try {
+              audioFiles = jsonDecode(item['audio_files']);
+            } catch (_) {}
           } else if (item['audio_files'] is List) {
             audioFiles = item['audio_files'];
           }

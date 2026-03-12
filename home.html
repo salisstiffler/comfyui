@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Comfy Pro Max - AI Generation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#10b77f",
+                        "background-light": "#f6f8f7",
+                        "background-dark": "#10221c",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .active-tab {
+            border-bottom: 3px solid #10b77f;
+            color: #10b77f;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<header class="sticky top-0 z-10 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-primary/10">
+<div class="flex items-center justify-between p-4">
+<button class="p-2 hover:bg-primary/10 rounded-lg transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h1 class="text-xl font-bold tracking-tight text-primary">Comfy Pro Max</h1>
+<div class="size-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border border-primary/30">
+<img class="w-full h-full object-cover" data-alt="User profile avatar icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwNfcTmuMd1GR2qJrsuGplDVN7ABP1ro_AO0ASg8GJcazrysQSW1IEmU5UaXD_ARQVTx7nFlD1YdSPr0gTC_eoPO52PLsl_IJC7qNdfEJ27i7L4p3rojbg5YwIOWl6CtHqF85H3YQaNs93OroUILiXuvcwBim4l3l8FC6mgPHParItdpB6giHV8BsM1ZWUzwNti4FUGSIe04n_FwweXGkrusoSI38Hq_a2ZJREXInvY0wKMf5bae8ErakSXUmA7gcOBm0WanOQvDlo"/>
+</div>
+</div>
+<nav class="flex px-4 gap-8">
+<a class="flex flex-col items-center justify-center border-b-[3px] border-primary text-primary pb-3 pt-2 px-2" href="#">
+<span class="text-sm font-bold">Image</span>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-transparent text-slate-500 dark:text-slate-400 pb-3 pt-2 px-2" href="#">
+<span class="text-sm font-bold">Music</span>
+</a>
+</nav>
+</header>
+<main class="flex-1 overflow-y-auto pb-32">
+<section class="p-4 space-y-6">
+<div class="space-y-2">
+<label class="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Prompt</label>
+<div class="relative group">
+<textarea class="w-full h-32 p-4 bg-white dark:bg-primary/5 border border-slate-200 dark:border-primary/20 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all resize-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600" placeholder="A futuristic city with floating gardens and neon lights at sunset, cinematic lighting, 8k resolution..."></textarea>
+</div>
+</div>
+<div class="space-y-3">
+<h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1">Aspect Ratio</h3>
+<div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+<button class="flex-shrink-0 px-4 py-2 rounded-lg bg-primary text-white font-medium text-sm">1:1 Square</button>
+<button class="flex-shrink-0 px-4 py-2 rounded-lg bg-white dark:bg-primary/10 border border-slate-200 dark:border-primary/20 text-slate-700 dark:text-slate-300 font-medium text-sm">16:9 Wide</button>
+<button class="flex-shrink-0 px-4 py-2 rounded-lg bg-white dark:bg-primary/10 border border-slate-200 dark:border-primary/20 text-slate-700 dark:text-slate-300 font-medium text-sm">9:16 Story</button>
+<button class="flex-shrink-0 px-4 py-2 rounded-lg bg-white dark:bg-primary/10 border border-slate-200 dark:border-primary/20 text-slate-700 dark:text-slate-300 font-medium text-sm">4:3 Photo</button>
+</div>
+</div>
+<button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">auto_awesome</span>
+                Generate Image
+            </button>
+</section>
+<section class="px-4 py-6 space-y-4">
+<div class="flex items-center justify-between">
+<h3 class="text-lg font-bold">Recent Creations</h3>
+<button class="text-primary text-sm font-semibold">View All</button>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="aspect-square rounded-xl bg-slate-200 dark:bg-primary/10 overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="Abstract colorful nebula in deep space" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDEoZRob2i3g-NVgChE5lRbqZiVf2NPKqXIZtMv7MGN6KM_pjSXO-eMHyJoRNveieeLKR_tn9ONzQ6P78ZdULknpd914GM4HFTqwZqi9_dP3m8l4gGBobjsfokcrzy_gkfY5mZ5nzTloJHdBPPI_B6BAbU0NO5eHubEiLadUBwQEHL4Rfubc6KV3mjfBlAkqhAXmjbA6-Lxv0GPzlwkGnqdatfDQzWShBa3kvCDxjWi-x0Xay42vfSIQCPZHHiju_WqoTYHVcLNPdBX"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">share</span></button>
+</div>
+</div>
+<div class="aspect-square rounded-xl bg-slate-200 dark:bg-primary/10 overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="Surreal digital landscape with floating mountains" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqse1roNh8O9R8wbmPf36lvT3YbnjIx6V41dEyGoOTVC2O0187z_U7ALhitc_ZK9fpI7eQnK72UYukf_WlsZB2zCu00V1XjnJJypQ3VbOboGNFBIfa6KBf1LItq9n3V0QN84OJf9lsLZV2QhdoVDA3rmV-PRcN3sgVJtU42ZGfZvvgnfAr6ePymCC1p_n-eC6sHLl0BVtzhCs9eSc8-WdPL5fv88re7ltVYWd7aY72gy4rMiBvQQi9-F9T5Y3Fp1zA0Pz-Zcso6KLZ"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">share</span></button>
+</div>
+</div>
+<div class="aspect-square rounded-xl bg-slate-200 dark:bg-primary/10 overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="Minimalist abstract organic 3D shapes" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWicZHGID1qCY0faX4AtJ9nHzdc3qG8tPjYg2epcjHNcebPmlO0O5gn6hfvAxhmaiZHONG3-rUVnLe-lWl7Q4TCQnDgvNBQHtkWUz-FSFUfjFPV5CBFUEu_CcBfREQDchKoNaQ4BoMl_uXK7_8kJ6NWT-rq51_KGhq_P2tczK9-Ew8gmhB18qOlkGTnurHpUwia9OFLLeR4CoDBAly-crc5BPF6I5N38ZFl-RQbPEiVnYQnUBjyoZ-RVDvAScnLDnRVwaIEO4G-efx"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">share</span></button>
+</div>
+</div>
+<div class="aspect-square rounded-xl bg-slate-200 dark:bg-primary/10 overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="Cyberpunk street with rain reflections" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdp6dsGq4IEtSj7yVar_yGh34SXiskOW9JX5U78u-LZtTv8y74hwAGLZG-TvFrLcrCtOiBjnU1Q5DrPIhYI2-MzoVXMT_oO11Qozln9pO8yu1UDfcRk4dSSnkpH3hY1oCLrfghjXC4tw5HyFlb5dfyYHohdjiEs65ayuT-Y175qQxe8TkzKqYislJ96iZDXTuWSFf3l5XNggLY4Rup1KfwWtCMsPihqlIfHkJPa4KXUpikljeXgeNgBDVH6ORzK3D61ZcVHVdAGdgw"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-2 bg-white/20 backdrop-blur-md rounded-full text-white"><span class="material-symbols-outlined text-sm">share</span></button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<footer class="fixed bottom-0 left-0 right-0 bg-background-light dark:bg-background-dark border-t border-primary/10 px-4 pb-6 pt-2 z-20">
+<div class="flex items-center justify-between max-w-lg mx-auto">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined fill-1">home</span>
+<span class="text-[10px] font-medium">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="text-[10px] font-medium">Explore</span>
+</a>
+<div class="relative -top-8">
+<button class="size-14 rounded-full bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined !text-3xl">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">auto_awesome_motion</span>
+<span class="text-[10px] font-medium">Library</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-medium">Settings</span>
+</a>
+</div>
+</footer>
+</body></html>
