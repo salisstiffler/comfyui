@@ -1,0 +1,45 @@
+﻿Analyzing client...                                             
+
+   info - Unnecessary 'this.' qualifier - lib\models\task_model.dart:104:41 - unnecessary_this
+   info - Unnecessary 'this.' qualifier - lib\models\task_model.dart:105:39 - unnecessary_this
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:96:69 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:121:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:183:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\home_screen.dart:232:40 - deprecated_member_use
+   info - The 'if' statement could be replaced by a null-aware assignment - lib\screens\image_generator_screen.dart:60:9 - prefer_conditional_assignment
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:119:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:257:30 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:261:31 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:262:31 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:275:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:282:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:295:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:297:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:319:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:321:47 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\image_generator_screen.dart:345:31 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:355:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:358:64 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\screens\image_generator_screen.dart:427:11 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\image_generator_screen.dart:478:34 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\image_generator_screen.dart:545:33 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\image_generator_screen.dart:545:37 - unnecessary_underscores
+   info - Unnecessary use of 'toList' in a spread - lib\screens\monitor_screen.dart:57:24 - unnecessary_to_list_in_spreads
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\monitor_screen.dart:75:29 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\monitor_screen.dart:76:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\monitor_screen.dart:176:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\monitor_screen.dart:186:16 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\music_generator_screen.dart:69:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\music_generator_screen.dart:138:34 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:43:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:80:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:101:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:132:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:214:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:233:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:248:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\api_service.dart:261:7 - avoid_print
+   info - The import of 'package:sqflite/sqflite.dart' is unnecessary because all of the used elements are also provided by the import of 'package:sqflite_common_ffi/sqflite_ffi.dart' - lib\services\storage_service.dart:4:8 - unnecessary_import
+   info - Don't invoke 'print' in production code - lib\services\storage_service.dart:69:7 - avoid_print
+   info - Use the null-aware marker '?' rather than a null check via an 'if' - lib\services\storage_service.dart:88:7 - use_null_aware_elements
+

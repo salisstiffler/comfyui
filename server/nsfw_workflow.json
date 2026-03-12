@@ -1,0 +1,243 @@
+{
+  "1": {
+    "inputs": {
+      "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "2": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "3": {
+    "inputs": {
+      "shift": 3
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "采样算法（AuraFlow）"
+    }
+  },
+  "4": {
+    "inputs": {
+      "strength": 1,
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "CFGNorm",
+    "_meta": {
+      "title": "CFG归一化"
+    }
+  },
+  "5": {
+    "inputs": {
+      "pixels": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE编码"
+    }
+  },
+  "8": {
+    "inputs": {
+      "image": "z-image-turbo_00092_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "10": {
+    "inputs": {
+      "prompt": "remove all clothes，全裸",
+      "image": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEdit",
+    "_meta": {
+      "title": "文本编码（QwenImageEdit）"
+    }
+  },
+  "11": {
+    "inputs": {
+      "unet_name": "qwen_image_edit_fp8_e4m3fn.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "13": {
+    "inputs": {
+      "prompt": "",
+      "image": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImageEdit",
+    "_meta": {
+      "title": "文本编码（QwenImageEdit）"
+    }
+  },
+  "15": {
+    "inputs": {
+      "samples": [
+        "96",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "16": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "缩放图像（像素）"
+    }
+  },
+  "17": {
+    "inputs": {
+      "images": [
+        "16",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
+    }
+  },
+  "20": {
+    "inputs": {
+      "seed": 988328199244067,
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "13",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "21": {
+    "inputs": {
+      "lora_name": "qwen_image_edit_remove-clothing_v1.0.safetensors",
+      "strength_model": 1,
+      "model": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器（仅模型）"
+    }
+  },
+  "45": {
+    "inputs": {
+      "lora_name": "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器（仅模型）"
+    }
+  },
+  "46": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "82": {
+    "inputs": {
+      "anything": [
+        "21",
+        0
+      ],
+      "anything2": [
+        "1",
+        0
+      ],
+      "anything3": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "Anything Everywhere",
+    "_meta": {
+      "title": "Anything Everywhere"
+    }
+  },
+  "96": {
+    "inputs": {
+      "anything": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "清理显存占用"
+    }
+  }
+}

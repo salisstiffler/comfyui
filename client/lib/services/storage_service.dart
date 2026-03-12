@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/task_model.dart';
 
@@ -85,7 +84,7 @@ class StorageService {
     final db = await database;
     final Map<String, dynamic> values = {
       'status': status,
-      if (imageUrl != null) 'resultImageUrl': imageUrl,
+      'resultImageUrl': ?imageUrl,
       if (completedAt != null) 'completedAt': completedAt.toIso8601String(),
     };
     await db.update(

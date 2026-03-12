@@ -134,6 +134,29 @@ class ApiService {
     }
   }
 
+  static Future<String?> generateNsfw({
+    required String image,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/generate/nsfw'),
+      );
+      request.headers['X-User-ID'] = userId;
+      request.fields['image'] = image;
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final resBody = await response.stream.bytesToString();
+        return jsonDecode(resBody)['prompt_id'];
+      }
+      return null;
+    } catch (e) {
+      print('NSFW Error: $e');
+      return null;
+    }
+  }
+
   static Future<List<AiTask>> getJobs() async {
     try {
       final response = await http.get(
@@ -213,6 +236,18 @@ class ApiService {
     } catch (e) {
       print('Exception getting jobs: $e');
       return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>?> checkHealthFull() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/health'));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 

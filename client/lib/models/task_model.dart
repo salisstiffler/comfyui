@@ -19,6 +19,7 @@ class AiTask {
   final int width;
   final int height;
   final String? workflowMode; // 'SIMPLE' or 'ADVANCED'
+  final double progress;
 
   AiTask({
     required this.promptId,
@@ -39,6 +40,7 @@ class AiTask {
     this.width = 1024,
     this.height = 1024,
     this.workflowMode,
+    this.progress = 0.0,
   });
 
   bool get isMusic => type == 'music';
@@ -62,19 +64,22 @@ class AiTask {
       'batchSize': batchSize,
       'width': width,
       'height': height,
+      'progress': progress,
     };
   }
 
   factory AiTask.fromMap(Map<String, dynamic> map) {
     return AiTask(
-      promptId: map['promptId'],
-      prompt: map['prompt'],
-      status: map['status'],
+      promptId: map['prompt_id'] ?? map['promptId'] ?? '',
+      prompt: map['prompt'] ?? '',
+      status: map['status'] ?? 'queued',
       resultImageUrl: map['resultImageUrl'],
       resultAudioUrl: map['resultAudioUrl'],
       resultFilename: map['resultFilename'],
       musicDuration: (map['musicDuration'] as num?)?.toDouble(),
-      timestamp: DateTime.parse(map['timestamp']),
+      timestamp: map['timestamp'] is String 
+        ? DateTime.parse(map['timestamp']) 
+        : DateTime.fromMillisecondsSinceEpoch(((map['timestamp'] as num?) ?? 0).toInt() * 1000),
       completedAt: map['completedAt'] != null
           ? DateTime.parse(map['completedAt'])
           : null,
@@ -86,6 +91,7 @@ class AiTask {
       batchSize: map['batchSize'] ?? 1,
       width: map['width'] ?? 1024,
       height: map['height'] ?? 1024,
+      progress: (map['progress'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -94,6 +100,7 @@ class AiTask {
     String? resultImageUrl,
     String? resultAudioUrl,
     DateTime? completedAt,
+    double? progress,
   }) {
     return AiTask(
       promptId: promptId,
@@ -101,8 +108,8 @@ class AiTask {
       status: status ?? this.status,
       resultImageUrl: resultImageUrl ?? this.resultImageUrl,
       resultAudioUrl: resultAudioUrl ?? this.resultAudioUrl,
-      resultFilename: resultFilename ?? this.resultFilename,
-      musicDuration: musicDuration ?? this.musicDuration,
+      resultFilename: resultFilename,
+      musicDuration: musicDuration,
       timestamp: timestamp,
       completedAt: completedAt ?? this.completedAt,
       type: type,
@@ -113,6 +120,8 @@ class AiTask {
       batchSize: batchSize,
       width: width,
       height: height,
+      workflowMode: workflowMode,
+      progress: progress ?? this.progress,
     );
   }
 

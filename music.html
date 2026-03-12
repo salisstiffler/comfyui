@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Comfy Pro Max - Music Player</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              colors: {
+                "primary": "#10b77f",
+                "background-light": "#f6f8f7",
+                "background-dark": "#10221c",
+              },
+              fontFamily: {
+                "display": ["Inter", "sans-serif"]
+              },
+              borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+            },
+          },
+        }
+    </script>
+<style>
+        .waveform-bar {
+            width: 4px;
+            background-color: #10b77f;
+            border-radius: 2px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between p-4 bg-background-light dark:bg-background-dark">
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-slate-200 dark:hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-slate-900 dark:text-slate-100">keyboard_arrow_down</span>
+</button>
+<div class="text-center">
+<p class="text-xs uppercase tracking-widest text-slate-500 dark:text-primary/70 font-bold">Playing From</p>
+<h2 class="text-lg font-bold leading-tight">Comfy Pro Max</h2>
+</div>
+<button class="flex items-center justify-center p-2 rounded-full hover:bg-slate-200 dark:hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-slate-900 dark:text-slate-100">more_vert</span>
+</button>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col items-center justify-center px-6 gap-8 overflow-y-auto">
+<!-- Large Album Art -->
+<div class="relative w-full max-w-sm aspect-square">
+<div class="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-90"></div>
+<div class="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border border-primary/20">
+<div class="w-full h-full bg-center bg-cover" data-alt="Futuristic neon city drift scene with vibrant green and purple lights" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB9T8R375IYQot5jM-tzcOf_ZRcNR_GP5PMsWCiSfinFbMUcHft2YsfIolM-Nf3ym56ArGg0ebuth4bvbKFAPalxBddpAvOGxq_d7PP9MxP7fNB7mc01fLLdpiefoRp6Ka59wx9LaG76J5kBEuGhPSENXm45yPC7rjbmcImneZeUqFHhukglGK9bVhDa_978dt7QkLKV9cdVmGL4fyaOwqFse2dpU05JKBrsy7m6eyGT6MuPX8WO_Fpv-79U72yZdkcJf6Jk1a7G8oa');">
+</div>
+</div>
+</div>
+<!-- Track Info -->
+<div class="text-center w-full">
+<h1 class="text-3xl font-bold tracking-tight mb-1">Neon Drift</h1>
+<p class="text-primary font-medium text-lg">AI Generated</p>
+</div>
+<!-- Waveform Visualizer Placeholder -->
+<div class="w-full flex items-end justify-center gap-1 h-12 px-4 opacity-80">
+<div class="waveform-bar h-4"></div>
+<div class="waveform-bar h-8"></div>
+<div class="waveform-bar h-6"></div>
+<div class="waveform-bar h-10"></div>
+<div class="waveform-bar h-12"></div>
+<div class="waveform-bar h-7"></div>
+<div class="waveform-bar h-9"></div>
+<div class="waveform-bar h-11"></div>
+<div class="waveform-bar h-5"></div>
+<div class="waveform-bar h-8"></div>
+<div class="waveform-bar h-6"></div>
+<div class="waveform-bar h-10"></div>
+<div class="waveform-bar h-4"></div>
+<div class="waveform-bar h-7"></div>
+<div class="waveform-bar h-9"></div>
+<div class="waveform-bar h-12"></div>
+<div class="waveform-bar h-8"></div>
+<div class="waveform-bar h-10"></div>
+<div class="waveform-bar h-6"></div>
+<div class="waveform-bar h-4"></div>
+</div>
+<!-- Progress Slider -->
+<div class="w-full max-w-sm space-y-2">
+<div class="relative h-1.5 w-full bg-slate-300 dark:bg-primary/20 rounded-full overflow-hidden">
+<div class="absolute top-0 left-0 h-full w-[45%] bg-primary"></div>
+</div>
+<div class="flex justify-between text-xs font-medium text-slate-500 dark:text-slate-400">
+<span>1:17</span>
+<span>2:23</span>
+</div>
+</div>
+<!-- Playback Controls -->
+<div class="flex items-center justify-between w-full max-w-xs mb-8">
+<button class="p-2 text-slate-900 dark:text-slate-100 opacity-70 hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-3xl">shuffle</span>
+</button>
+<button class="p-2 text-slate-900 dark:text-slate-100 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1">skip_previous</span>
+</button>
+<button class="flex items-center justify-center size-20 rounded-full bg-primary text-background-dark shadow-lg shadow-primary/30 hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-5xl" style="font-variation-settings: 'FILL' 1">play_arrow</span>
+</button>
+<button class="p-2 text-slate-900 dark:text-slate-100 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1">skip_next</span>
+</button>
+<button class="p-2 text-slate-900 dark:text-slate-100 opacity-70 hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-3xl">repeat</span>
+</button>
+</div>
+</main>
+<!-- Bottom Navigation Bar -->
+</body></html>
