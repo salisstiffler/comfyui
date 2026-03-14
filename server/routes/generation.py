@@ -5,8 +5,40 @@ import time
 import sqlite3
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Body
+from config import WORKFLOW_FILE, I2I_WORKFLOW_FILE, MUSIC_WORKFLOW_FILE, DB_FILE, NSFW_WORKFLOW_FILE, UNDRESS_WORKFLOW_FILE
+from comfy_client import comfy_request
 
-from config import WORKFLOW_FILE, I2I_WORKFLOW_FILE, MUSIC_WORKFLOW_FILE, DB_FILE, NSFW_WORKFLOW_FILE
+router = APIRouter(prefix="/api")
+
+@router.post("/generate/undress")
+async def generate_undress(
+    image: str = Form(...),
+    x_user_id: str = Header(default="guest")
+):
+    if not os.path.exists(UNDRESS_WORKFLOW_FILE):
+        raise HTTPException(status_code=500, detail="Undress Workflow missing")
+    
+    with open(UNDRESS_WORKFLOW_FILE, "r", encoding="utf-8") as f:
+        workflow = json.load(f)
+    
+    # EXACTLY ONE MODIFICATION: The input image filename
+    if "8" in workflow:
+        workflow["8"]["inputs"]["image"] = image
+    
+    # Seed is fixed in the JSON (17771612868412)
+    final_seed = workflow.get("20", {}).get("inputs", {}).get("seed", 0)
+
+    res = await comfy_request("POST", "/prompt", json_data={"prompt": workflow})
+    if not res: raise HTTPException(status_code=500, detail="ComfyUI rejected task")
+    
+    pid = res["prompt_id"]
+    params = json.dumps({"mode": "UNDRESS", "seed": final_seed, "image": image})
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("INSERT INTO jobs (prompt_id, prompt, status, timestamp, params, images, user_id, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (pid, "一键脱衣", "queued", time.time(), params, "[]", x_user_id.lower(), "image"))
+    conn.commit()
+    conn.close()
+    return {"prompt_id": pid}
 
 @router.post("/generate/nsfw")
 async def generate_nsfw(
@@ -23,10 +55,9 @@ async def generate_nsfw(
     # Node 8 is LoadImage
     if "8" in workflow: workflow["8"]["inputs"]["image"] = image
     
-    final_seed = random.randint(1, 2**32 - 1)
-    # Node 20 is KSampler
-    if "20" in workflow:
-        workflow["20"]["inputs"]["seed"] = final_seed
+    # Get the seed from the workflow itself for database logging
+    # Do NOT override the workflow's seed here
+    final_seed = workflow["20"]["inputs"].get("seed", 0) if "20" in workflow else 0
 
     res = await comfy_request("POST", "/prompt", json_data={"prompt": workflow})
     if not res: raise HTTPException(status_code=500, detail="ComfyUI rejected task")
@@ -39,9 +70,6 @@ async def generate_nsfw(
     conn.commit()
     conn.close()
     return {"prompt_id": pid}
-from comfy_client import comfy_request
-
-router = APIRouter(prefix="/api")
 
 @router.post("/upload")
 async def upload_image(file: UploadFile = File(...)):

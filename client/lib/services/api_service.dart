@@ -157,6 +157,29 @@ class ApiService {
     }
   }
 
+  static Future<String?> generateUndress({
+    required String image,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/generate/undress'),
+      );
+      request.headers['X-User-ID'] = userId;
+      request.fields['image'] = image;
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final resBody = await response.stream.bytesToString();
+        return jsonDecode(resBody)['prompt_id'];
+      }
+      return null;
+    } catch (e) {
+      print('Undress Error: $e');
+      return null;
+    }
+  }
+
   static Future<List<AiTask>> getJobs() async {
     try {
       final response = await http.get(

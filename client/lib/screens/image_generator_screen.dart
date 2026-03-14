@@ -130,7 +130,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
         if (pid != null && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('NSFW Task Processing...'),
+              content: Text('一键脱衣任务处理中...'),
               backgroundColor: Colors.deepPurple,
             ),
           );
@@ -259,7 +259,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
                   Provider.of<NavigationProvider>(
                     context,
                     listen: false,
-                  ).setIndex(3);
+                  ).setIndex(2);
                 },
                 child: const Text(
                   "View All",
@@ -352,53 +352,16 @@ class _GeneratorScreenState extends State<GeneratorScreen>
                 Positioned(
                   bottom: 12,
                   right: 12,
-                  child: Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => _submitNsfw(gen),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Colors.deepPurple, Colors.purpleAccent],
-                            ),
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.purple.withOpacity(0.4),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.auto_fix_high, size: 14, color: Colors.white),
-                              SizedBox(width: 6),
-                              Text(
-                                "ONE-CLICK NSFW",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                  child: GestureDetector(
+                    onTap: () => gen.setInputImage(null, null),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () => gen.setInputImage(null, null),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Colors.black54,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.close, size: 16, color: Colors.white),
-                        ),
-                      ),
-                    ],
+                      child: const Icon(Icons.close, size: 16, color: Colors.white),
+                    ),
                   ),
                 ),
               ],
@@ -676,7 +639,7 @@ class _GeneratorScreenState extends State<GeneratorScreen>
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Image.network(
-              t.resultImageUrl!,
+              t.resultImageUrl ?? '',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(color: glassColor),
             ),

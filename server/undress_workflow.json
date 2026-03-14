@@ -13,19 +13,6 @@
     "class_type": "VAELoader",
     "_meta": { "title": "加载VAE" }
   },
-  "3": {
-    "inputs": {
-      "shift": 3,
-      "model": ["110", 0]
-    },
-    "class_type": "ModelSamplingAuraFlow",
-    "_meta": { "title": "采样算法（AuraFlow）" }
-  },
-  "4": {
-    "inputs": { "strength": 1, "model": ["3", 0] },
-    "class_type": "CFGNorm",
-    "_meta": { "title": "CFG归一化" }
-  },
   "5": {
     "inputs": {
       "pixels": ["16", 0],
@@ -42,8 +29,9 @@
   "10": {
     "inputs": {
       "prompt": "remove all clothes，全裸",
-      "image": ["16", 0],
-      "clip": ["1", 0]
+      "clip": ["1", 0],
+      "vae": ["2", 0],
+      "image": ["16", 0]
     },
     "class_type": "TextEncodeQwenImageEdit",
     "_meta": { "title": "文本编码（QwenImageEdit）" }
@@ -59,8 +47,9 @@
   "13": {
     "inputs": {
       "prompt": "",
-      "image": ["16", 0],
-      "clip": ["1", 0]
+      "clip": ["1", 0],
+      "vae": ["2", 0],
+      "image": ["16", 0]
     },
     "class_type": "TextEncodeQwenImageEdit",
     "_meta": { "title": "文本编码（QwenImageEdit）" }
@@ -90,13 +79,13 @@
   },
   "20": {
     "inputs": {
-      "seed": 555377970153763,
+      "seed": 241861158751783,
       "steps": 10,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
-      "model": ["4", 0],
+      "model": ["21", 0],
       "positive": ["10", 0],
       "negative": ["13", 0],
       "latent_image": ["5", 0]
@@ -123,31 +112,16 @@
     "_meta": { "title": "LoRA加载器（仅模型）" }
   },
   "46": {
-    "inputs": { "filename_prefix": "ComfyUI", "images": ["15", 0] },
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": ["15", 0]
+    },
     "class_type": "SaveImage",
     "_meta": { "title": "保存图像" }
-  },
-  "82": {
-    "inputs": {
-      "anything": ["110", 0],
-      "anything2": ["1", 0],
-      "anything3": ["2", 0]
-    },
-    "class_type": "Anything Everywhere",
-    "_meta": { "title": "Anything Everywhere" }
   },
   "96": {
     "inputs": { "anything": ["20", 0] },
     "class_type": "easy cleanGpuUsed",
     "_meta": { "title": "清理显存占用" }
-  },
-  "110": {
-    "inputs": {
-      "lora_name": "WAN-2.2-I2V-HandjobBlowjobCombo-HIGH-v1.safetensors",
-      "strength_model": 1,
-      "model": ["21", 0]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": { "title": "LoRA加载器（仅模型）" }
   }
 }

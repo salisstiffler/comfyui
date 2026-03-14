@@ -15,8 +15,34 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen>
+    with SingleTickerProviderStateMixin {
   String _tab = "IMAGES";
+  late AnimationController _tabAnimCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _tabAnimCtrl.dispose();
+    super.dispose();
+  }
+
+  void _switchTab(String tab) {
+    if (_tab == tab) return;
+    setState(() => _tab = tab);
+    _tabAnimCtrl
+      ..reset()
+      ..forward();
+  }
+
   @override
   Widget build(BuildContext context) {
     final prov = Provider.of<TaskProvider>(context);
@@ -38,59 +64,147 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: glassColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                _tBtn("IMAGES", _tab == "IMAGES"),
-                _tBtn("MUSIC", _tab == "MUSIC"),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            itemCount: keys.length,
-            itemBuilder: (ctx, idx) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12, top: 12),
-                  child: Text(
-                    keys[idx],
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white24,
+        _header(list),
+        if (list.isEmpty)
+          Expanded(child: _emptyState())
+        else
+          Expanded(
+            child: FadeTransition(
+              opacity: _tabAnimCtrl,
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+                itemCount: keys.length,
+                itemBuilder: (ctx, idx) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12, top: 16),
+                      child: Text(
+                        keys[idx],
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          color: Colors.white24,
+                        ),
+                      ),
                     ),
-                  ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: _tab == "IMAGES" ? 2 : 1,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        mainAxisExtent: _tab == "IMAGES" ? 190 : 110,
+                      ),
+                      itemCount: groups[keys[idx]]!.length,
+                      itemBuilder: (c, i) =>
+                          _item(groups[keys[idx]]![i], list),
+                    ),
+                  ],
                 ),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: _tab == "IMAGES" ? 2 : 1,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    mainAxisExtent: _tab == "IMAGES" ? 180 : 80,
-                  ),
-                  itemCount: groups[keys[idx]]!.length,
-                  itemBuilder: (c, i) => _item(groups[keys[idx]]![i], list),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }
+
+  Widget _header(List<AiTask> list) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+    child: Row(
+      children: [
+        // Segmented Tab Switcher
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D1F18),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: glassBorder),
+            ),
+            child: Row(
+              children: [
+                _tBtn("IMAGES", Icons.photo_library_outlined, _tab == "IMAGES"),
+                _tBtn("MUSIC", Icons.music_note_outlined, _tab == "MUSIC"),
+              ],
+            ),
+          ),
+        ),
+        if (_tab == "MUSIC" && list.isNotEmpty) ...[
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () {
+              final playback = Provider.of<PlaybackProvider>(
+                context,
+                listen: false,
+              );
+              playback.setPlaylist(list);
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const MusicPlayerScreen(),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    accentEmerald.withOpacity(0.3),
+                    accentEmerald.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: accentEmerald.withOpacity(0.4)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.play_arrow_rounded, color: accentEmerald, size: 16),
+                  SizedBox(width: 4),
+                  Text(
+                    '全部播放',
+                    style: TextStyle(
+                      color: accentEmerald,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  Widget _emptyState() => Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          _tab == "IMAGES"
+              ? Icons.photo_library_outlined
+              : Icons.music_note_outlined,
+          color: Colors.white10,
+          size: 48,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          _tab == "IMAGES" ? 'NO IMAGES YET' : 'NO MUSIC YET',
+          style: const TextStyle(
+            color: Colors.white12,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _item(AiTask t, List<AiTask> full) => GestureDetector(
     onTap: () {
@@ -99,7 +213,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           context,
           listen: false,
         );
-        // Find all music tasks in the current grid
         final musicTasks = full.where((task) => task.isMusic).toList();
         final indexOfT = musicTasks.indexOf(t);
 
@@ -109,7 +222,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
         );
 
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => const MusicPlayerScreen()),
+          PageRouteBuilder(
+            pageBuilder: (ctx, anim, _) => const MusicPlayerScreen(),
+            transitionsBuilder: (ctx, anim, _, child) => SlideTransition(
+              position: Tween(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+              child: child,
+            ),
+          ),
         );
       } else {
         FullScreenGallery.show(context, full, full.indexOf(t));
@@ -118,46 +240,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
     child: ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Stack(
+        fit: StackFit.expand,
         children: [
-          Positioned.fill(
-            child: t.isMusic
-                ? Container(
-                    color: glassColor,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.music_note,
-                          color: accentEmerald,
-                          size: 36,
-                        ),
-                        if (t.resultAudioUrl != null) ...[
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              Uri.parse(t.resultAudioUrl!).pathSegments.last,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.white54,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  )
-                : Image.network(t.resultImageUrl!, fit: BoxFit.cover),
-          ),
+          if (t.isMusic)
+            _musicCard(t)
+          else
+            Image.network(t.resultImageUrl ?? '', fit: BoxFit.cover),
+          // Gradient overlay + label
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.fromLTRB(10, 20, 10, 8),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
@@ -170,8 +265,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
@@ -182,24 +277,96 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ),
   );
 
-  Widget _tBtn(String l, bool a) => Expanded(
+  Widget _musicCard(AiTask t) => Container(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          const Color(0xFF1a2a6c).withOpacity(0.8),
+          accentEmerald.withOpacity(0.15),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    child: Stack(
+      children: [
+        Positioned(
+          right: -10,
+          bottom: -10,
+          child: Icon(
+            Icons.music_note_rounded,
+            size: 80,
+            color: accentEmerald.withOpacity(0.07),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accentEmerald.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: accentEmerald.withOpacity(0.3)),
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: accentEmerald,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (t.resultAudioUrl != null)
+                Text(
+                  Uri.parse(t.resultAudioUrl!).pathSegments.last,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white.withOpacity(0.5),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _tBtn(String l, IconData icon, bool a) => Expanded(
     child: GestureDetector(
-      onTap: () => setState(() => _tab = l),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      onTap: () => _switchTab(l),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
           color: a ? accentEmerald : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Center(
-          child: Text(
-            l,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
               color: a ? Colors.white : Colors.white30,
             ),
-          ),
+            const SizedBox(width: 6),
+            Text(
+              l,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: a ? Colors.white : Colors.white30,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
         ),
       ),
     ),

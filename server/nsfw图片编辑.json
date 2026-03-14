@@ -19,32 +19,6 @@
       "title": "加载VAE"
     }
   },
-  "3": {
-    "inputs": {
-      "shift": 3,
-      "model": [
-        "21",
-        0
-      ]
-    },
-    "class_type": "ModelSamplingAuraFlow",
-    "_meta": {
-      "title": "采样算法（AuraFlow）"
-    }
-  },
-  "4": {
-    "inputs": {
-      "strength": 1,
-      "model": [
-        "3",
-        0
-      ]
-    },
-    "class_type": "CFGNorm",
-    "_meta": {
-      "title": "CFG归一化"
-    }
-  },
   "5": {
     "inputs": {
       "pixels": [
@@ -63,7 +37,7 @@
   },
   "8": {
     "inputs": {
-      "image": "z-image-turbo_00092_.png"
+      "image": "img_00002_.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -73,12 +47,16 @@
   "10": {
     "inputs": {
       "prompt": "remove all clothes，全裸",
-      "image": [
-        "16",
-        0
-      ],
       "clip": [
         "1",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ],
+      "image": [
+        "16",
         0
       ]
     },
@@ -100,12 +78,16 @@
   "13": {
     "inputs": {
       "prompt": "",
-      "image": [
-        "16",
-        0
-      ],
       "clip": [
         "1",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ],
+      "image": [
+        "16",
         0
       ]
     },
@@ -159,14 +141,14 @@
   },
   "20": {
     "inputs": {
-      "seed": 988328199244067,
+      "seed": 241861158751783,
       "steps": 10,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
       "model": [
-        "4",
+        "21",
         0
       ],
       "positive": [
