@@ -7,4 +7,5 @@ MUSIC_WORKFLOW_FILE = os.path.join(os.path.dirname(__file__), "music_workflow.js
 MUSIC_WORKFLOW2_FILE = os.path.join(os.path.dirname(__file__), "music_workflow2.json")
 NSFW_WORKFLOW_FILE = os.path.join(os.path.dirname(__file__), "nsfw_image_edit.json")
 UNDRESS_WORKFLOW_FILE = os.path.join(os.path.dirname(__file__), "undress_workflow.json")
+MULTIANGLE_WORKFLOW_FILE = os.path.join(os.path.dirname(__file__), "qwen多角度相机控制.json")
 DB_FILE = os.path.join(os.path.dirname(__file__), "jobs.db")

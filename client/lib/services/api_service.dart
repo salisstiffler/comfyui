@@ -180,6 +180,37 @@ class ApiService {
     }
   }
 
+  static Future<String?> generateMultiAngle({
+    required String image,
+    required double horizontalAngle,
+    required double verticalAngle,
+    required double zoom,
+    String prompt = "<sks> angle shot",
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/generate/multiangle'),
+      );
+      request.headers['X-User-ID'] = userId;
+      request.fields['image'] = image;
+      request.fields['horizontal_angle'] = horizontalAngle.toString();
+      request.fields['vertical_angle'] = verticalAngle.toString();
+      request.fields['zoom'] = zoom.toString();
+      request.fields['prompt'] = prompt;
+
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        final resBody = await response.stream.bytesToString();
+        return jsonDecode(resBody)['prompt_id'];
+      }
+      return null;
+    } catch (e) {
+      print('MultiAngle Error: $e');
+      return null;
+    }
+  }
+
   static Future<List<AiTask>> getJobs() async {
     try {
       final response = await http.get(

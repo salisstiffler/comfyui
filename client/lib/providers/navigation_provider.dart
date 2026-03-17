@@ -6,7 +6,9 @@ class NavigationProvider extends ChangeNotifier {
 
   void setIndex(int index) {
     selectedIndex = index;
-    pageController.jumpToPage(index);
+    if (pageController.hasClients) {
+      pageController.jumpToPage(index);
+    }
     notifyListeners();
   }
 }

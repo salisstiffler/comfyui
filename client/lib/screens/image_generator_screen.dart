@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -9,6 +10,7 @@ import '../providers/navigation_provider.dart';
 import '../theme/app_theme.dart';
 import '../services/api_service.dart';
 import '../widgets/full_screen_gallery.dart';
+import '../widgets/camera_control.dart';
 
 class GeneratorScreen extends StatefulWidget {
   const GeneratorScreen({super.key});
@@ -47,31 +49,21 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   }
 
   void _submit(GeneratorProvider gen) async {
-    final activePrompt = gen.isI2I
-        ? _advancedPromptCtrl.text
-        : _simplePromptCtrl.text;
-    if (activePrompt.isEmpty) return;
-    if (gen.isI2I && gen.inputImageBytes == null) return;
+    if (gen.mode == GeneratorMode.textToImage) {
+      if (_simplePromptCtrl.text.isEmpty) return;
+    } else {
+      if (gen.inputImageBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please upload a base image first')),
+        );
+        return;
+      }
+    }
+
     setState(() => _isSub = true);
     try {
       String? pid;
-      if (gen.isI2I) {
-        String? sName = gen.serverImageName;
-        sName ??= await ApiService.uploadImage(
-            gen.inputImageBytes!,
-            gen.inputImageFilename!,
-          );
-        if (sName != null) {
-          gen.serverImageName = sName;
-          pid = await ApiService.generateEdit(
-            prompt: _advancedPromptCtrl.text,
-            image: sName,
-            denoise: gen.denoise,
-            seed: gen.randomSeed ? null : int.tryParse(_seedCtrl.text),
-            steps: gen.steps.toInt(),
-          );
-        }
-      } else {
+      if (gen.mode == GeneratorMode.textToImage) {
         pid = await ApiService.generateImage(
           _simplePromptCtrl.text,
           steps: gen.steps.toInt(),
@@ -81,64 +73,78 @@ class _GeneratorScreenState extends State<GeneratorScreen>
           width: gen.width,
           height: gen.height,
         );
-      }
-      if (pid != null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Processing...'),
-              backgroundColor: accentEmerald,
-            ),
-          );
+      } else {
+        String? sName = gen.serverImageName;
+        sName ??= await ApiService.uploadImage(
+          gen.inputImageBytes!,
+          gen.inputImageFilename!,
+        );
+        if (sName != null) {
+          gen.serverImageName = sName;
+          if (gen.mode == GeneratorMode.imageEdit) {
+            pid = await ApiService.generateEdit(
+              prompt: _advancedPromptCtrl.text,
+              image: sName,
+              denoise: gen.denoise,
+              seed: gen.randomSeed ? null : int.tryParse(_seedCtrl.text),
+              steps: gen.steps.toInt(),
+            );
+          } else if (gen.mode == GeneratorMode.multiAngle) {
+            pid = await ApiService.generateMultiAngle(
+              image: sName,
+              horizontalAngle: gen.horizontalAngle,
+              verticalAngle: gen.verticalAngle,
+              zoom: gen.zoom,
+            );
+          }
         }
       }
+
+      if (pid != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Processing...'),
+            backgroundColor: accentEmerald,
+          ),
+        );
+      }
     } finally {
-      setState(() => _isSub = false);
+      if (mounted) setState(() => _isSub = false);
     }
   }
-
-  final List<String> _magicPrompts = [
-    "A futuristic city with floating gardens and neon lights at sunset, cinematic lighting, 8k resolution, highly detailed",
-    "Cyberpunk street market in the rain, neon signs reflecting in puddles, intricate details, volumetric lighting",
-    "Ancient forest with glowing mushrooms and mystical creatures, ethereal atmosphere, fantasy art style",
-    "Minimalist architectural masterpiece in the desert, sharp lines, dramatic shadows, sand dunes in background",
-    "Close-up portrait of a robot with human-like expressions, exposed circuitry, metallic textures, professional bokeh",
-    "Space station orbiting a purple gas giant, asteroid belt, cosmic dust, epic scale, sci-fi concept art",
-    "A cozy library with books flying around, magical dust, warm sunlight through stained glass, whimsical atmosphere",
-    "Steampunk airship fleet sailing through a sea of clouds at dawn, brass details, billowing smoke",
-  ];
 
   void _generateRandomPrompt(GeneratorProvider gen) {
-    final r = (DateTime.now().millisecondsSinceEpoch % _magicPrompts.length).toInt();
-    final p = _magicPrompts[r];
+    const prompts = [
+      "A futuristic city with floating gardens and neon lights at sunset, cinematic lighting, 8k resolution, highly detailed",
+      "Cyberpunk street market in the rain, neon signs reflecting in puddles, intricate details, volumetric lighting",
+      "Ancient forest with glowing mushrooms and mystical creatures, ethereal atmosphere, fantasy art style",
+      "Minimalist architectural masterpiece in the desert, sharp lines, dramatic shadows, sand dunes in background",
+      "Close-up portrait of a robot with human-like expressions, exposed circuitry, metallic textures, professional bokeh",
+      "Space station orbiting a purple gas giant, asteroid belt, cosmic dust, epic scale, sci-fi concept art",
+      "A cozy library with books flying around, magical dust, warm sunlight through stained glass, whimsical atmosphere",
+      "Steampunk airship fleet sailing through a sea of clouds at dawn, brass details, billowing smoke",
+      "An underwater city with bioluminescent structures, giant jellyfish, schools of glowing fish, deep sea atmosphere, cinematic",
+      "A mystical mountain temple surrounded by cherry blossoms and fog, traditional Japanese architecture, peaceful, 8k",
+      "Hyper-realistic portrait of an explorer in a dense jungle, sweat on skin, detailed gear, dappled sunlight through canopy",
+      "A surreal landscape with floating islands, cascading waterfalls, and giant crystal formations, vibrant colors",
+      "Vintage 1950s diner on Mars, red dust outside windows, classic cars with thrusters, retro-futurism style",
+      "A magical potion shop with colorful liquids in ornate bottles, mysterious ingredients, soft candlelight, whimsical",
+      "Post-apocalyptic city reclaimed by nature, skyscrapers covered in vines, wild animals roaming streets, dramatic lighting",
+      "A futuristic laboratory with holographic displays, scientists in clean suits, advanced technology, sterile atmosphere",
+      "Viking village in a snowy fjord under northern lights, wooden longhouses, flickering torches, epic atmosphere",
+      "An enchanted garden with giant flowers, hummingbirds with iridescent feathers, soft morning dew, fantasy aesthetic",
+      "Retro-style travel poster of a colony on the moon, domed cities, earth in the background, flat vector art style",
+      "A majestic dragon perched on a volcanic peak, flowing lava, dark clouds, epic scale, high-fantasy illustration",
+      "Symmetry portrait of a galactic goddess, stars and nebulae in hair, cosmic energy, ethereal glow, masterpiece",
+      "A solarpunk city with lush greenery on every building, wind turbines, clean canals, bright sunny day, optimistic future",
+      "Noir detective office in a rainy city, venetian blind shadows, cigarette smoke, classic 1940s aesthetic, black and white",
+      "A giant robotic guardian standing in a desert of blue sand, ancient ruins, two suns in the sky, sci-fi concept art",
+      "Whimsical treehouse village in a giant redwood forest, rope bridges, lanterns, cozy atmosphere, storybook style",
+    ];
+    final r = (DateTime.now().millisecondsSinceEpoch % prompts.length).toInt();
+    final p = prompts[r];
     _simplePromptCtrl.text = p;
     gen.setSimplePrompt(p);
-  }
-
-  void _submitNsfw(GeneratorProvider gen) async {
-    if (gen.inputImageBytes == null) return;
-    setState(() => _isSub = true);
-    try {
-      String? sName = gen.serverImageName;
-      sName ??= await ApiService.uploadImage(
-        gen.inputImageBytes!,
-        gen.inputImageFilename!,
-      );
-      if (sName != null) {
-        gen.serverImageName = sName;
-        final pid = await ApiService.generateNsfw(image: sName);
-        if (pid != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('一键脱衣任务处理中...'),
-              backgroundColor: Colors.deepPurple,
-            ),
-          );
-        }
-      }
-    } finally {
-      setState(() => _isSub = false);
-    }
   }
 
   @override
@@ -157,142 +163,172 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: accentEmerald.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                _modeBtn('SIMPLE', !gen.isI2I, () => gen.setI2I(false)),
-                _modeBtn('ADVANCED', gen.isI2I, () => gen.setI2I(true)),
-              ],
+          _fadeIn(
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: accentEmerald.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  _modeBtn('文生图', gen.mode == GeneratorMode.textToImage, () => gen.setMode(GeneratorMode.textToImage)),
+                  _modeBtn('图片编辑', gen.mode == GeneratorMode.imageEdit, () => gen.setMode(GeneratorMode.imageEdit)),
+                  _modeBtn('多角度', gen.mode == GeneratorMode.multiAngle, () => gen.setMode(GeneratorMode.multiAngle)),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
-          if (gen.isI2I) ...[
-            _sectionLabel("Base Image"),
+
+          if (gen.mode != GeneratorMode.textToImage) ...[
+            _fadeIn(delay: 1, child: _sectionLabel("基础图片")),
             const SizedBox(height: 8),
-            _buildI2IPicker(gen),
-            const SizedBox(height: 16),
-          ],
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _sectionLabel(gen.isI2I ? "Edit Instructions" : "Prompt"),
-              if (!gen.isI2I)
-                GestureDetector(
-                  onTap: () => _generateRandomPrompt(gen),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: accentEmerald.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: accentEmerald.withOpacity(0.3)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.auto_fix_high, size: 12, color: accentEmerald),
-                        SizedBox(width: 4),
-                        Text(
-                          'MAGIC',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: accentEmerald,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          gen.isI2I
-              ? _buildAdvancedPromptInput(gen)
-              : _buildSimplePromptInput(gen),
-          const SizedBox(height: 24),
-          if (!gen.isI2I) ...[
-            _sectionLabel("Aspect Ratio"),
-            const SizedBox(height: 12),
-            _buildAspectRatioSelector(gen),
+            _fadeIn(delay: 2, child: _buildI2IPicker(gen)),
             const SizedBox(height: 24),
           ],
-          GestureDetector(
-            onTap: () => setState(() => _showAdv = !_showAdv),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+
+          if (gen.mode == GeneratorMode.multiAngle) ...[
+            _fadeIn(delay: 3, child: _sectionLabel("相机控制 (360° 无死角)")),
+            const SizedBox(height: 12),
+            _fadeIn(delay: 4, child: CameraControl(
+              horizontalAngle: gen.horizontalAngle,
+              verticalAngle: gen.verticalAngle,
+              zoom: gen.zoom,
+              onHorizontalChanged: (h) => gen.setMultiAngle(h, gen.verticalAngle, gen.zoom),
+              onVerticalChanged: (v) => gen.setMultiAngle(gen.horizontalAngle, v, gen.zoom),
+              onZoomChanged: (z) => gen.setMultiAngle(gen.horizontalAngle, gen.verticalAngle, z),
+            )),
+            const SizedBox(height: 24),
+          ],
+
+          if (gen.mode != GeneratorMode.multiAngle) ...[
+            _fadeIn(delay: 5, child: _sectionLabel(gen.mode == GeneratorMode.imageEdit ? "编辑指令" : "提示词")),
+            const SizedBox(height: 8),
+            _fadeIn(delay: 6, child: Stack(
               children: [
-                Text(
-                  _showAdv ? 'HIDE OPTIONS' : 'ADVANCED OPTIONS',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.white24,
-                    fontWeight: FontWeight.bold,
+                gen.mode == GeneratorMode.imageEdit
+                    ? _buildAdvancedPromptInput(gen)
+                    : _buildSimplePromptInput(gen),
+                if (gen.mode == GeneratorMode.textToImage)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: _ScaleButton(
+                      onTap: () => _generateRandomPrompt(gen),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: accentEmerald,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accentEmerald.withOpacity(0.4),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_fix_high, size: 14, color: Colors.white),
+                            SizedBox(width: 6),
+                            Text(
+                              'MAGIC',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                Icon(
-                  _showAdv
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  size: 14,
-                  color: Colors.white24,
-                ),
               ],
-            ),
-          ),
-          if (_showAdv) _buildAdvPanel(gen),
-          const SizedBox(height: 32),
-          _buildGenerateButton(gen),
+            )),
+            const SizedBox(height: 24),
+          ],
+
+
+          if (gen.mode == GeneratorMode.textToImage) ...[
+            _fadeIn(delay: 7, child: _sectionLabel("画面比例")),
+            const SizedBox(height: 12),
+            _fadeIn(delay: 8, child: _buildAspectRatioSelector(gen)),
+            const SizedBox(height: 24),
+          ],
+
+          if (gen.mode != GeneratorMode.multiAngle) ...[
+            _fadeIn(delay: 9, child: GestureDetector(
+              onTap: () => setState(() => _showAdv = !_showAdv),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(_showAdv ? '隐藏高级选项' : '高级选项', style: const TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.bold)),
+                  Icon(_showAdv ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 14, color: Colors.white24),
+                ],
+              ),
+            )),
+            if (_showAdv) _buildAdvPanel(gen),
+            const SizedBox(height: 32),
+          ],
+
+          _fadeIn(delay: 10, child: _buildGenerateButton(gen)),
           const SizedBox(height: 40),
-          Row(
+
+          _fadeIn(delay: 11, child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "Recent Creations",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              const Text("最近创作", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               TextButton(
-                onPressed: () {
-                  Provider.of<NavigationProvider>(
-                    context,
-                    listen: false,
-                  ).setIndex(2);
-                },
-                child: const Text(
-                  "View All",
-                  style: TextStyle(
-                    color: accentEmerald,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                onPressed: () => Provider.of<NavigationProvider>(context, listen: false).setIndex(2),
+                child: const Text("查看全部", style: TextStyle(color: accentEmerald, fontWeight: FontWeight.bold)),
               ),
             ],
-          ),
+          )),
           const SizedBox(height: 16),
-          _buildRecentGrid(displayTasks),
+          _fadeIn(delay: 12, child: _buildRecentGrid(displayTasks)),
           const SizedBox(height: 100),
         ],
       ),
     );
   }
 
+  Widget _fadeIn({required Widget child, int delay = 0}) => TweenAnimationBuilder<double>(
+    tween: Tween(begin: 0.0, end: 1.0),
+    duration: Duration(milliseconds: 600 + (delay * 100)),
+    curve: Curves.easeOutCubic,
+    builder: (context, value, child) {
+      return Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: child,
+        ),
+      );
+    },
+    child: child,
+  );
+
   Widget _modeBtn(String l, bool a, VoidCallback t) => Expanded(
-    child: GestureDetector(
+    child: _ScaleButton(
       onTap: t,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: a ? accentEmerald : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
+          boxShadow: a ? [BoxShadow(color: accentEmerald.withOpacity(0.3), blurRadius: 10)] : [],
         ),
         child: Center(
           child: Text(
             l,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: a ? Colors.white : Colors.white30,
             ),
@@ -306,21 +342,13 @@ class _GeneratorScreenState extends State<GeneratorScreen>
     padding: const EdgeInsets.only(left: 4),
     child: Text(
       label.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w900,
-        color: Colors.white24,
-        letterSpacing: 1.5,
-      ),
+      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.white24, letterSpacing: 1.5),
     ),
   );
 
   Widget _buildI2IPicker(GeneratorProvider gen) => GestureDetector(
     onTap: () async {
-      final res = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        withData: true,
-      );
+      final res = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
       if (res != null) {
         gen.setInputImage(res.files.first.bytes, res.files.first.name);
       }
@@ -331,35 +359,22 @@ class _GeneratorScreenState extends State<GeneratorScreen>
       decoration: BoxDecoration(
         color: accentEmerald.withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: gen.inputImageBytes != null
-              ? accentEmerald.withOpacity(0.5)
-              : accentEmerald.withOpacity(0.1),
-        ),
+        border: Border.all(color: gen.inputImageBytes != null ? accentEmerald.withOpacity(0.5) : accentEmerald.withOpacity(0.1)),
       ),
       child: gen.inputImageBytes != null
           ? Stack(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Image.memory(
-                    gen.inputImageBytes!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
+                  child: Image.memory(gen.inputImageBytes!, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
                 ),
                 Positioned(
-                  bottom: 12,
-                  right: 12,
+                  bottom: 12, right: 12,
                   child: GestureDetector(
                     onTap: () => gen.setInputImage(null, null),
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
-                      ),
+                      decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
                       child: const Icon(Icons.close, size: 16, color: Colors.white),
                     ),
                   ),
@@ -369,40 +384,24 @@ class _GeneratorScreenState extends State<GeneratorScreen>
           : Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.add_a_photo_outlined,
-                  color: accentEmerald.withOpacity(0.5),
-                ),
+                Icon(Icons.add_a_photo_outlined, color: accentEmerald.withOpacity(0.5)),
                 const SizedBox(height: 8),
-                Text(
-                  'UPLOAD BASE IMAGE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: accentEmerald.withOpacity(0.5),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('点击上传基础图片', style: TextStyle(fontSize: 10, color: accentEmerald.withOpacity(0.5), fontWeight: FontWeight.bold)),
               ],
             ),
     ),
   );
 
   Widget _buildSimplePromptInput(GeneratorProvider gen) => Container(
-    key: const ValueKey('simple_prompt'),
     padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: accentEmerald.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: accentEmerald.withOpacity(0.2)),
-    ),
+    decoration: BoxDecoration(color: accentEmerald.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: accentEmerald.withOpacity(0.2))),
     child: TextField(
       controller: _simplePromptCtrl,
       maxLines: 5,
       onChanged: (v) => gen.setSimplePrompt(v),
       style: const TextStyle(fontSize: 16, color: Colors.white),
       decoration: const InputDecoration(
-        hintText:
-            "A futuristic city with floating gardens and neon lights at sunset, cinematic lighting, 8k resolution...",
+        hintText: "描述你想生成的画面...",
         hintStyle: TextStyle(color: Colors.white24, fontSize: 16),
         border: InputBorder.none,
         isDense: true,
@@ -412,20 +411,15 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   );
 
   Widget _buildAdvancedPromptInput(GeneratorProvider gen) => Container(
-    key: const ValueKey('advanced_prompt'),
     padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: accentEmerald.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: accentEmerald.withOpacity(0.2)),
-    ),
+    decoration: BoxDecoration(color: accentEmerald.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: accentEmerald.withOpacity(0.2))),
     child: TextField(
       controller: _advancedPromptCtrl,
       maxLines: 5,
       onChanged: (v) => gen.setAdvancedPrompt(v),
       style: const TextStyle(fontSize: 16, color: Colors.white),
       decoration: const InputDecoration(
-        hintText: "Describe what you want to change in the image...",
+        hintText: "描述你想修改的内容...",
         hintStyle: TextStyle(color: Colors.white24, fontSize: 16),
         border: InputBorder.none,
         isDense: true,
@@ -453,18 +447,9 @@ class _GeneratorScreenState extends State<GeneratorScreen>
               decoration: BoxDecoration(
                 color: isSel ? accentEmerald : accentEmerald.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isSel ? accentEmerald : accentEmerald.withOpacity(0.2),
-                ),
+                border: Border.all(color: isSel ? accentEmerald : accentEmerald.withOpacity(0.2)),
               ),
-              child: Text(
-                r,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: isSel ? Colors.white : Colors.white70,
-                ),
-              ),
+              child: Text(r, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.white70)),
             ),
           );
         },
@@ -475,16 +460,13 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   Widget _buildAdvPanel(GeneratorProvider gen) => Container(
     margin: const EdgeInsets.only(top: 16),
     padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.black26,
-      borderRadius: BorderRadius.circular(20),
-    ),
+    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(20)),
     child: Column(
       children: [
-        if (gen.isI2I)
-          _slider('DENOISE', gen.denoise, 0.1, 1.0, (v) => gen.setDenoise(v)),
-        _slider('STEPS', gen.steps, 1, 50, (v) => gen.setSteps(v)),
-        if (!gen.isI2I) _slider('CFG', gen.cfg, 1, 20, (v) => gen.setCfg(v)),
+        if (gen.mode == GeneratorMode.imageEdit)
+          _slider('重绘强度', gen.denoise, 0.1, 1.0, (v) => gen.setDenoise(v)),
+        _slider('步数', gen.steps, 1, 50, (v) => gen.setSteps(v)),
+        if (gen.mode == GeneratorMode.textToImage) _slider('提示词引导', gen.cfg, 1, 20, (v) => gen.setCfg(v)),
         _buildSeedInput(gen),
       ],
     ),
@@ -498,113 +480,65 @@ class _GeneratorScreenState extends State<GeneratorScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'SEED',
-                style: TextStyle(fontSize: 9, color: Colors.white30),
-              ),
+              const Text('种子值', style: TextStyle(fontSize: 9, color: Colors.white30)),
               TextField(
                 controller: _seedCtrl,
                 onChanged: (v) => gen.setSeed(int.tryParse(v)),
                 keyboardType: TextInputType.number,
                 enabled: !gen.randomSeed,
                 style: const TextStyle(fontSize: 12, color: accentEmerald),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: InputBorder.none,
-                ),
+                decoration: const InputDecoration(isDense: true, border: InputBorder.none),
               ),
             ],
           ),
         ),
-        const Text(
-          'RANDOM',
-          style: TextStyle(fontSize: 9, color: Colors.white30),
-        ),
-        Switch(
-          value: gen.randomSeed,
-          onChanged: (v) => gen.setRandomSeed(v),
-          activeThumbColor: accentEmerald,
-        ),
+        const Text('随机', style: TextStyle(fontSize: 9, color: Colors.white30)),
+        Switch(value: gen.randomSeed, onChanged: (v) => gen.setRandomSeed(v), activeThumbColor: accentEmerald),
       ],
     ),
   );
 
-  Widget _slider(
-    String l,
-    double v,
-    double min,
-    double max,
-    Function(double) c,
-  ) => Column(
+  Widget _slider(String l, double v, double min, double max, Function(double) c) => Column(
     children: [
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            l,
-            style: const TextStyle(
-              fontSize: 9,
-              color: Colors.white30,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            v.toStringAsFixed(1),
-            style: const TextStyle(fontSize: 9, color: accentEmerald),
-          ),
+          Text(l, style: const TextStyle(fontSize: 9, color: Colors.white30, fontWeight: FontWeight.bold)),
+          Text(v.toStringAsFixed(1), style: const TextStyle(fontSize: 9, color: accentEmerald)),
         ],
       ),
-      Slider(
-        value: v,
-        min: min,
-        max: max,
-        onChanged: c,
-        activeColor: accentEmerald,
-      ),
+      Slider(value: v, min: min, max: max, onChanged: c, activeColor: accentEmerald),
     ],
   );
 
-  Widget _buildGenerateButton(GeneratorProvider gen) => GestureDetector(
+  Widget _buildGenerateButton(GeneratorProvider gen) => _ScaleButton(
     onTap: _isSub ? null : () => _submit(gen),
-    child: Container(
-      height: 56,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: 60,
       width: double.infinity,
       decoration: BoxDecoration(
         color: accentEmerald,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: accentEmerald.withOpacity(0.3),
-            blurRadius: 20,
+            color: accentEmerald.withOpacity(0.4),
+            blurRadius: _isSub ? 10 : 20,
             offset: const Offset(0, 8),
-          ),
+          )
         ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (_isSub)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
+            const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
           else ...[
-            Icon(
-              gen.isI2I ? Icons.edit_note : Icons.auto_awesome,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 8),
+            Icon(gen.mode == GeneratorMode.textToImage ? Icons.auto_awesome : (gen.mode == GeneratorMode.imageEdit ? Icons.edit_note : Icons.camera), color: Colors.white),
+            const SizedBox(width: 12),
             Text(
-              gen.isI2I ? "Apply Edits" : "Generate Image",
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              gen.mode == GeneratorMode.textToImage ? "开始生成" : (gen.mode == GeneratorMode.imageEdit ? "开始编辑" : "生成视角"),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
             ),
           ],
         ],
@@ -613,24 +547,11 @@ class _GeneratorScreenState extends State<GeneratorScreen>
   );
 
   Widget _buildRecentGrid(List<AiTask> tasks) {
-    if (tasks.isEmpty) {
-      return Container(
-        height: 200,
-        alignment: Alignment.center,
-        child: const Text(
-          "No recent creations",
-          style: TextStyle(color: Colors.white24),
-        ),
-      );
-    }
+    if (tasks.isEmpty) return Container(height: 200, alignment: Alignment.center, child: const Text("暂无创作", style: TextStyle(color: Colors.white24)));
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 16, mainAxisSpacing: 16),
       itemCount: tasks.length,
       itemBuilder: (ctx, i) {
         final t = tasks[i];
@@ -638,14 +559,53 @@ class _GeneratorScreenState extends State<GeneratorScreen>
           onTap: () => FullScreenGallery.show(ctx, tasks, i),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: Image.network(
-              t.resultImageUrl ?? '',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(color: glassColor),
-            ),
+            child: Image.network(t.resultImageUrl ?? '', fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(color: glassColor)),
           ),
         );
       },
+    );
+  }
+}
+
+class _ScaleButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _ScaleButton({required this.child, this.onTap});
+
+  @override
+  State<_ScaleButton> createState() => _ScaleButtonState();
+}
+
+class _ScaleButtonState extends State<_ScaleButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) => _controller.reverse(),
+      onTapCancel: () => _controller.reverse(),
+      onTap: () {
+        if (widget.onTap != null) {
+          HapticFeedback.lightImpact();
+          widget.onTap!();
+        }
+      },
+      child: ScaleTransition(scale: _scale, child: widget.child),
     );
   }
 }

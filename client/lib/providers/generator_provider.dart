@@ -2,7 +2,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../models/task_model.dart';
 
+enum GeneratorMode { textToImage, imageEdit, multiAngle }
+
 class GeneratorProvider extends ChangeNotifier {
+  // Mode Management
+  GeneratorMode _mode = GeneratorMode.textToImage;
+  GeneratorMode get mode => _mode;
+
   // State Management
   String _simplePrompt = "";
   String _advancedPrompt = "";
@@ -16,19 +22,30 @@ class GeneratorProvider extends ChangeNotifier {
   int width = 1024;
   int height = 1024;
 
-  // I2I Fields
-  bool isI2I = false;
+  // I2I / Edit Fields
   Uint8List? inputImageBytes;
   String? inputImageFilename;
   String? serverImageName;
   double denoise = 1.0;
 
+  // Multi-Angle Fields
+  double horizontalAngle = 0;
+  double verticalAngle = 0;
+  double zoom = 5.0;
+
   String get simplePrompt => _simplePrompt;
   String get advancedPrompt => _advancedPrompt;
-  String get prompt => isI2I ? _advancedPrompt : _simplePrompt;
+  
+  bool get isI2I => _mode == GeneratorMode.imageEdit || _mode == GeneratorMode.multiAngle;
 
+  void setMode(GeneratorMode m) {
+    _mode = m;
+    notifyListeners();
+  }
+
+  // Backward compatibility or convenience
   void setI2I(bool v) {
-    isI2I = v;
+    _mode = v ? GeneratorMode.imageEdit : GeneratorMode.textToImage;
     notifyListeners();
   }
 
@@ -41,6 +58,13 @@ class GeneratorProvider extends ChangeNotifier {
 
   void setDenoise(double v) {
     denoise = v;
+    notifyListeners();
+  }
+
+  void setMultiAngle(double h, double v, double z) {
+    horizontalAngle = h;
+    verticalAngle = v;
+    zoom = z;
     notifyListeners();
   }
 

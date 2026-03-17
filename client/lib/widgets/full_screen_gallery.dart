@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -20,6 +21,7 @@ class FullScreenGallery extends StatefulWidget {
         context,
         PageRouteBuilder(
           opaque: false,
+          barrierColor: Colors.transparent,
           pageBuilder: (_, __, ___) => FullScreenGallery(images: list, initialIndex: idx),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -37,6 +39,11 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
   bool _showInfo = false;
   late PhotoViewController _photoViewController;
   final FocusNode _focusNode = FocusNode();
+
+  // Pull-to-dismiss state
+  double _dragOffset = 0.0;
+  double _dragScale = 1.0;
+  bool _isDragging = false;
 
   @override
   void initState() {
@@ -80,9 +87,39 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     }
   }
 
+  void _onVerticalDragUpdate(DragUpdateDetails details) {
+    if (_photoViewController.scale != 1.0 && _photoViewController.scale != null) return;
+    
+    setState(() {
+      _isDragging = true;
+      _dragOffset += details.delta.dy;
+      // Shrink scale as we drag down
+      if (_dragOffset > 0) {
+        _dragScale = (1.0 - (_dragOffset / 1000)).clamp(0.7, 1.0);
+      } else {
+        _dragScale = 1.0;
+      }
+    });
+  }
+
+  void _onVerticalDragEnd(DragEndDetails details) {
+    if (!_isDragging) return;
+
+    if (_dragOffset > 150 || details.primaryVelocity! > 800) {
+      Navigator.pop(context);
+    } else {
+      setState(() {
+        _isDragging = false;
+        _dragOffset = 0.0;
+        _dragScale = 1.0;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentTask = widget.images[_currentIndex];
+    final backgroundOpacity = (1.0 - (_dragOffset.abs() / 500)).clamp(0.0, 1.0);
     
     return RawKeyboardListener(
       focusNode: _focusNode,
@@ -99,40 +136,51 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.98),
+        backgroundColor: Colors.black.withOpacity(0.98 * backgroundOpacity),
         body: Stack(
           children: [
-            // Gallery
-            Listener(
-              onPointerSignal: _handlePointerSignal,
-              child: PhotoViewGallery.builder(
-                scrollPhysics: const BouncingScrollPhysics(),
-                builder: (BuildContext context, int index) {
-                  return PhotoViewGalleryPageOptions(
-                    imageProvider: NetworkImage(widget.images[index].resultImageUrl ?? ''),
-                    controller: index == _currentIndex ? _photoViewController : null,
-                    initialScale: PhotoViewComputedScale.contained,
-                    minScale: PhotoViewComputedScale.contained * 0.5,
-                    maxScale: PhotoViewComputedScale.covered * 10,
-                    heroAttributes: PhotoViewHeroAttributes(tag: widget.images[index].promptId),
-                    onTapUp: (context, details, controllerValue) {
-                      setState(() => _showInfo = !_showInfo);
-                    },
-                  );
-                },
-                itemCount: widget.images.length,
-                loadingBuilder: (context, event) => const Center(
-                  child: CircularProgressIndicator(color: accentEmerald),
+            // Gallery with Pull-to-Dismiss support
+            GestureDetector(
+              onVerticalDragUpdate: _onVerticalDragUpdate,
+              onVerticalDragEnd: _onVerticalDragEnd,
+              child: Transform.translate(
+                offset: Offset(0, _dragOffset),
+                child: Transform.scale(
+                  scale: _dragScale,
+                  child: Listener(
+                    onPointerSignal: _handlePointerSignal,
+                    child: PhotoViewGallery.builder(
+                      scrollPhysics: _isDragging ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
+                      builder: (BuildContext context, int index) {
+                        return PhotoViewGalleryPageOptions(
+                          imageProvider: NetworkImage(widget.images[index].resultImageUrl ?? ''),
+                          controller: index == _currentIndex ? _photoViewController : null,
+                          initialScale: PhotoViewComputedScale.contained,
+                          minScale: PhotoViewComputedScale.contained * 0.5,
+                          maxScale: PhotoViewComputedScale.covered * 10,
+                          heroAttributes: PhotoViewHeroAttributes(tag: widget.images[index].promptId),
+                          onTapUp: (context, details, controllerValue) {
+                            if (!_isDragging) {
+                              setState(() => _showInfo = !_showInfo);
+                            }
+                          },
+                        );
+                      },
+                      itemCount: widget.images.length,
+                      loadingBuilder: (context, event) => const Center(
+                        child: CircularProgressIndicator(color: accentEmerald),
+                      ),
+                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                      pageController: _pageController,
+                      onPageChanged: (index) {
+                        setState(() {
+                          _currentIndex = index;
+                          _photoViewController.scale = 1.0;
+                        });
+                      },
+                    ),
+                  ),
                 ),
-                backgroundDecoration: const BoxDecoration(color: Colors.transparent),
-                pageController: _pageController,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                    // Reset scale of previous image indirectly by disposing controller or resetting it
-                    _photoViewController.scale = 1.0;
-                  });
-                },
               ),
             ),
 
@@ -142,7 +190,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
               left: 0,
               right: 0,
               child: AnimatedOpacity(
-                opacity: _showInfo ? 1.0 : 0.0,
+                opacity: (_showInfo && !_isDragging) ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 200),
                 child: Container(
                   padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, bottom: 12),
@@ -155,10 +203,17 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                   ),
                   child: Row(
                     children: [
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
-                        onPressed: () => Navigator.pop(context),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                        ),
                       ),
                       const Spacer(),
                       Container(
@@ -166,6 +221,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                         decoration: BoxDecoration(
                           color: Colors.black38,
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white10),
                         ),
                         child: Text(
                           '${_currentIndex + 1} / ${widget.images.length}',
@@ -173,6 +229,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                             color: Colors.white,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
+                            fontFamily: 'RobotoMono',
                           ),
                         ),
                       ),
@@ -188,8 +245,8 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
               ),
             ),
 
-            // Navigation Arrows
-            if (_currentIndex > 0)
+            // Navigation Arrows (Hide when dragging)
+            if (!_isDragging && _currentIndex > 0)
               Positioned(
                 left: 16,
                 top: 0,
@@ -198,7 +255,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                   child: _navCircle(Icons.arrow_back_ios_new_rounded, _prev),
                 ),
               ),
-            if (_currentIndex < widget.images.length - 1)
+            if (!_isDragging && _currentIndex < widget.images.length - 1)
               Positioned(
                 right: 16,
                 top: 0,
@@ -212,7 +269,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
             AnimatedPositioned(
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeOutQuint,
-              bottom: _showInfo ? 0 : -400,
+              bottom: (_showInfo && !_isDragging) ? 0 : -500,
               left: 0,
               right: 0,
               child: Container(
@@ -238,7 +295,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
-                            "DETIALS",
+                            "DETAILS",
                             style: TextStyle(
                               color: accentEmerald,
                               fontSize: 10,
@@ -257,14 +314,14 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                     const SizedBox(height: 16),
                     Text(
                       currentTask.prompt,
-                      style: const TextStyle(color: Colors.white, fontSize: 16, height: 1.6),
+                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5, fontWeight: FontWeight.w500),
                       maxLines: 8,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 24),
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
+                      spacing: 10,
+                      runSpacing: 10,
                       children: [
                         _infoChip(Icons.speed, 'Steps: ${currentTask.steps}'),
                         _infoChip(Icons.tune, 'CFG: ${currentTask.cfg}'),
@@ -286,32 +343,32 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     onTap: onTap,
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: 48,
-      height: 48,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.black26,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white10),
       ),
-      child: Icon(icon, color: Colors.white70, size: 20),
+      child: Icon(icon, color: Colors.white70, size: 18),
     ),
   );
 
   Widget _infoChip(IconData icon, String text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.04),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white.withOpacity(0.06)),
+      color: Colors.white.withOpacity(0.05),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.white.withOpacity(0.08)),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: accentEmerald.withOpacity(0.8)),
+        Icon(icon, size: 13, color: accentEmerald),
         const SizedBox(width: 8),
         Text(
           text,
-          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
         ),
       ],
     ),

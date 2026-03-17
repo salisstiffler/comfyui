@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,13 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/generator_provider.dart';
+import '../providers/music_provider.dart';
 import '../theme/app_theme.dart';
 
 import 'image_generator_screen.dart';
 import 'music_generator_screen.dart';
 import 'monitor_screen.dart';
 import 'library_screen.dart';
-import 'settings_screen.dart';
 import 'undress_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -34,12 +35,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
   late AnimationController _fabPulseController;
   late Animation<double> _fabPulseAnim;
 
+  // Radial Menu State
+  bool _isFabExpanded = false;
+  late AnimationController _radialController;
+  late Animation<double> _radialAnim;
+
   static const _navItems = [
     (Icons.auto_awesome_outlined, Icons.auto_awesome, '生成'),
     (Icons.monitor_outlined, Icons.monitor, '工作流'),
     (Icons.photo_library_outlined, Icons.photo_library, '素材库'),
     (Icons.auto_fix_high_outlined, Icons.auto_fix_high, '高级'),
-    (Icons.settings_outlined, Icons.settings, '设置'),
   ];
 
   @override
@@ -68,6 +73,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
     _subTabController = TabController(length: 2, vsync: this);
 
+    _radialController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _radialAnim = CurvedAnimation(
+      parent: _radialController,
+      curve: Curves.elasticOut,
+      reverseCurve: Curves.easeInBack,
+    );
+
     _load();
     Timer.periodic(const Duration(seconds: 10), (_) => _check());
   }
@@ -79,15 +94,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     }
     _fabPulseController.dispose();
     _subTabController.dispose();
+    _radialController.dispose();
     super.dispose();
   }
 
   void _onNavTap(int index, NavigationProvider nav) {
+    if (_isFabExpanded) _toggleRadial();
     HapticFeedback.lightImpact();
+    nav.setIndex(index);
     _navAnimControllers[index].forward().then((_) {
       _navAnimControllers[index].reverse();
     });
-    nav.setIndex(index);
   }
 
   void _load() async {
@@ -117,160 +134,180 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     }
   }
 
-  void _showQuickActions(BuildContext context, NavigationProvider nav) {
+  void _toggleRadial() {
     HapticFeedback.mediumImpact();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0D1F18),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border.all(color: glassBorder),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white12,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              "快速创建",
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: Colors.white38,
-                letterSpacing: 3,
-              ),
-            ),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+    setState(() {
+      _isFabExpanded = !_isFabExpanded;
+      if (_isFabExpanded) {
+        _radialController.forward();
+      } else {
+        _radialController.reverse();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final nav = Provider.of<NavigationProvider>(context);
+    final safeIndex = nav.selectedIndex.clamp(0, _navItems.length - 1);
+
+    return Scaffold(
+      extendBody: true,
+      backgroundColor: bgSpace,
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
               children: [
-                _actionItem(
-                  ctx,
-                  Icons.auto_awesome,
-                  "文生图",
-                  const Color(0xFF10B77F),
-                  () {
-                    nav.setIndex(0);
-                    Provider.of<GeneratorProvider>(context, listen: false)
-                        .setI2I(false);
-                    Navigator.pop(ctx);
-                  },
-                ),
-                _actionItem(
-                  ctx,
-                  Icons.edit_note,
-                  "图生图",
-                  const Color(0xFF6C63FF),
-                  () {
-                    nav.setIndex(0);
-                    Provider.of<GeneratorProvider>(context, listen: false)
-                        .setI2I(true);
-                    Navigator.pop(ctx);
-                  },
-                ),
-                _actionItem(
-                  ctx,
-                  Icons.auto_fix_high,
-                  "高级",
-                  const Color(0xFFFF6B6B),
-                  () {
-                    nav.setIndex(3);
-                    Navigator.pop(ctx);
-                  },
+                _header(),
+                if (safeIndex == 0) _buildSubTabs(),
+                Expanded(
+                  child: IndexedStack(
+                    index: safeIndex,
+                    children: [
+                      TabBarView(
+                        controller: _subTabController,
+                        children: const [
+                          GeneratorScreen(),
+                          MusicGeneratorScreen(),
+                        ],
+                      ),
+                      const MonitorScreen(),
+                      const LibraryScreen(),
+                      const UndressScreen(),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const SizedBox(height: 8),
+          ),
+          
+          if (_isFabExpanded || _radialController.isAnimating)
+            GestureDetector(
+              onTap: _toggleRadial,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedBuilder(
+                animation: _radialAnim,
+                builder: (context, _) => Container(
+                  color: Colors.black.withOpacity((0.6 * _radialAnim.value).clamp(0.0, 1.0)),
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+              ),
+            ),
+          
+          if (_isFabExpanded || _radialController.isAnimating)
+            _buildRadialMenu(nav),
+        ],
+      ),
+      bottomNavigationBar: _navbar(context, nav),
+    );
+  }
+
+  Widget _buildRadialMenu(NavigationProvider nav) {
+    final items = [
+      (Icons.auto_awesome, "文生图", const Color(0xFF10B77F), () {
+        nav.setIndex(0);
+        _subTabController.animateTo(0);
+        Provider.of<GeneratorProvider>(context, listen: false).setMode(GeneratorMode.textToImage);
+      }),
+      (Icons.edit_note, "图片编辑", const Color(0xFF6C63FF), () {
+        nav.setIndex(0);
+        _subTabController.animateTo(0);
+        Provider.of<GeneratorProvider>(context, listen: false).setMode(GeneratorMode.imageEdit);
+      }),
+      (Icons.camera, "多角度", const Color(0xFFFF6B6B), () {
+        nav.setIndex(0);
+        _subTabController.animateTo(0);
+        Provider.of<GeneratorProvider>(context, listen: false).setMode(GeneratorMode.multiAngle);
+      }),
+      (Icons.music_note, "简易音乐", const Color(0xFF00E5FF), () {
+        nav.setIndex(0);
+        _subTabController.animateTo(1);
+        Provider.of<MusicGeneratorProvider>(context, listen: false).setIsSimpleMode(true);
+      }),
+      (Icons.queue_music, "高级音乐", const Color(0xFFFFD600), () {
+        nav.setIndex(0);
+        _subTabController.animateTo(1);
+        Provider.of<MusicGeneratorProvider>(context, listen: false).setIsSimpleMode(false);
+      }),
+    ];
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        ignoring: !_isFabExpanded && !_radialController.isAnimating,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            for (int i = 0; i < items.length; i++)
+              _buildRadialItem(i, items.length, items[i]),
           ],
         ),
       ),
     );
   }
 
-  Widget _actionItem(
-    BuildContext ctx,
-    IconData icon,
-    String label,
-    Color color,
-    VoidCallback onTap,
-  ) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Column(
-          children: [
-            Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [color.withOpacity(0.3), color.withOpacity(0.08)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                border: Border.all(color: color.withOpacity(0.4)),
-              ),
-              child: Icon(icon, color: color, size: 30),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final nav = Provider.of<NavigationProvider>(context);
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: bgSpace,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _header(),
-            if (nav.selectedIndex == 0) _buildSubTabs(),
-            Expanded(
-              child: IndexedStack(
-                index: nav.selectedIndex,
+  Widget _buildRadialItem(int index, int total, (IconData, String, Color, VoidCallback) item) {
+    // Arc from 165 degrees to 15 degrees
+    final startAngle = 165.0 * math.pi / 180.0;
+    final endAngle = 15.0 * math.pi / 180.0;
+    final currentAngle = startAngle - (index * (startAngle - endAngle) / (total - 1));
+    
+    return AnimatedBuilder(
+      animation: _radialAnim,
+      builder: (context, child) {
+        // Increase radius slightly and ensure calculation moves things UP
+        final radius = 160.0 * _radialAnim.value;
+        final x = radius * math.cos(currentAngle);
+        final y = radius * math.sin(currentAngle); // Positive sin for 15-165 degrees
+        
+        // 90 is approximate height of bottom nav
+        return Positioned(
+          bottom: 90 + y, 
+          left: (MediaQuery.of(context).size.width / 2 - 28) + x,
+          child: Opacity(
+            opacity: _radialAnim.value.clamp(0.0, 1.0),
+            child: GestureDetector(
+              onTap: () {
+                _toggleRadial();
+                item.$4();
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TabBarView(
-                    controller: _subTabController,
-                    children: const [
-                      GeneratorScreen(),
-                      MusicGeneratorScreen(),
-                    ],
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A24),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: item.$3.withOpacity(0.6), width: 2),
+                      boxShadow: [
+                        BoxShadow(color: item.$3.withOpacity(0.3), blurRadius: 15, spreadRadius: 1),
+                      ],
+                    ),
+                    child: Icon(item.$1, color: item.$3, size: 26),
                   ),
-                  const MonitorScreen(),
-                  const LibraryScreen(),
-                  const UndressScreen(),
-                  const SettingsScreen(),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      item.$2,
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: _navbar(context, nav),
+          ),
+        );
+      },
     );
   }
 
@@ -315,7 +352,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
           children: [
-            // Status indicator with label
             AnimatedContainer(
               duration: const Duration(milliseconds: 500),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -448,20 +484,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
         alignment: Alignment.topCenter,
         clipBehavior: Clip.none,
         children: [
-          // Nav items
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 for (int i = 0; i < _navItems.length; i++) ...[
-                  if (i == 2) const SizedBox(width: 56), // FAB space
+                  if (i == 2) const SizedBox(width: 56), 
                   _navItem(i, nav.selectedIndex == i, nav),
                 ],
               ],
             ),
           ),
-          // FAB
           Positioned(
             top: -22,
             child: _fabButton(context, nav),
@@ -475,26 +509,31 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
     return AnimatedBuilder(
       animation: _fabPulseAnim,
       builder: (_, __) => GestureDetector(
-        onTap: () => _showQuickActions(context, nav),
+        onTap: _toggleRadial,
         child: Container(
           width: 56,
           height: 56,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1DE9AA), Color(0xFF10B77F)],
+            gradient: LinearGradient(
+              colors: _isFabExpanded 
+                ? [const Color(0xFFFF6B6B), const Color(0xFFC91B65)]
+                : [const Color(0xFF1DE9AA), const Color(0xFF10B77F)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: accentEmerald.withOpacity(_fabPulseAnim.value * 0.5),
+                color: (_isFabExpanded ? const Color(0xFFC91B65) : accentEmerald).withOpacity(_fabPulseAnim.value * 0.5),
                 blurRadius: 20,
                 spreadRadius: 2,
               ),
             ],
           ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+          child: Transform.rotate(
+            angle: _isFabExpanded ? 45 * math.pi / 180 : 0,
+            child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+          ),
         ),
       ),
     );
@@ -502,6 +541,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
 
   Widget _navItem(int index, bool active, NavigationProvider nav) {
     final item = _navItems[index];
+    final safeIndex = nav.selectedIndex.clamp(0, _navItems.length - 1);
+    final isActuallyActive = safeIndex == index;
+
     return GestureDetector(
       onTap: () => _onNavTap(index, nav),
       behavior: HitTestBehavior.opaque,
@@ -515,9 +557,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: Icon(
-                  active ? item.$2 : item.$1,
-                  key: ValueKey(active),
-                  color: active ? accentEmerald : Colors.white30,
+                  isActuallyActive ? item.$2 : item.$1,
+                  key: ValueKey(isActuallyActive),
+                  color: isActuallyActive ? accentEmerald : Colors.white30,
                   size: 26,
                 ),
               ),
@@ -526,8 +568,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 duration: const Duration(milliseconds: 200),
                 style: TextStyle(
                   fontSize: 10,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                  color: active ? accentEmerald : Colors.white30,
+                  fontWeight: isActuallyActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActuallyActive ? accentEmerald : Colors.white30,
                 ),
                 child: Text(item.$3),
               ),
@@ -536,7 +578,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
                 height: 3,
-                width: active ? 20 : 0,
+                width: isActuallyActive ? 20 : 0,
                 decoration: BoxDecoration(
                   color: accentEmerald,
                   borderRadius: BorderRadius.circular(2),

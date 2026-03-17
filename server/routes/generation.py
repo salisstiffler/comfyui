@@ -5,7 +5,7 @@ import time
 import sqlite3
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Body
-from config import WORKFLOW_FILE, I2I_WORKFLOW_FILE, MUSIC_WORKFLOW_FILE, DB_FILE, NSFW_WORKFLOW_FILE, UNDRESS_WORKFLOW_FILE
+from config import WORKFLOW_FILE, I2I_WORKFLOW_FILE, MUSIC_WORKFLOW_FILE, DB_FILE, NSFW_WORKFLOW_FILE, UNDRESS_WORKFLOW_FILE, MULTIANGLE_WORKFLOW_FILE
 from comfy_client import comfy_request
 
 router = APIRouter(prefix="/api")
@@ -196,5 +196,67 @@ async def generate_music(req: dict = Body(...), x_user_id: str = Header(default=
         return {"prompt_id": pid}
     except Exception as e:
         print(f"Generate Music Error: {str(e)}")
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generate/multiangle")
+async def generate_multiangle(
+    image: str = Form(...),
+    horizontal_angle: float = Form(0),
+    vertical_angle: float = Form(0),
+    zoom: float = Form(5.0),
+    prompt: str = Form("<sks> angle shot"),
+    x_user_id: str = Header(default="guest")
+):
+    try:
+        if not os.path.exists(MULTIANGLE_WORKFLOW_FILE):
+            raise HTTPException(status_code=500, detail="Multi-angle workflow file missing")
+        with open(MULTIANGLE_WORKFLOW_FILE, "r", encoding="utf-8") as f:
+            workflow = json.load(f)
+            
+        # Node 28: LoadImage
+        if "28" in workflow:
+            workflow["28"]["inputs"]["image"] = image
+        
+        # Node 30: QwenMultiangleCameraNode
+        if "30" in workflow:
+            workflow["30"]["inputs"]["horizontal_angle"] = horizontal_angle
+            workflow["30"]["inputs"]["vertical_angle"] = vertical_angle
+            workflow["30"]["inputs"]["zoom"] = zoom
+            
+        # Node 31: text_0 (Prompt)
+        if "31" in workflow:
+            # We assume text_0 is the prompt input
+            workflow["31"]["inputs"]["text_0"] = prompt
+            
+        # Node 17: KSampler seed
+        seed = random.randint(1, 2**32 - 1)
+        if "17" in workflow:
+            workflow["17"]["inputs"]["seed"] = seed
+
+        print(f"Multi-angle Workflow mapping done. Sending to ComfyUI...")
+        res = await comfy_request("POST", "/prompt", json_data={"prompt": workflow})
+        if not res or "prompt_id" not in res:
+            print(f"ComfyUI Response Error (Multiangle): {res}")
+            raise HTTPException(status_code=500, detail="ComfyUI rejected multi-angle task")
+            
+        pid = res["prompt_id"]
+        print(f"Multi-angle Task accepted: {pid}")
+        params = json.dumps({
+            "mode": "MULTIANGLE",
+            "seed": seed, 
+            "image": image,
+            "horizontal_angle": horizontal_angle,
+            "vertical_angle": vertical_angle,
+            "zoom": zoom
+        })
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("INSERT INTO jobs (prompt_id, prompt, status, timestamp, params, images, user_id, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                     (pid, prompt, "queued", time.time(), params, "[]", x_user_id.lower(), "image"))
+        conn.commit()
+        conn.close()
+        return {"prompt_id": pid}
+    except Exception as e:
+        print(f"Generate Multiangle Error: {str(e)}")
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))
