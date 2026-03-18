@@ -1,0 +1,9 @@
+tunnel: dfbbad8a-8424-44c4-aabb-e5e65cb15475
+credentials-file: C:\Users\chenb\.cloudflared\dfbbad8a-8424-44c4-aabb-e5e65cb15475.json
+
+ingress:
+  - hostname: comfyui.berlin2027.dpdns.org
+    service: http://localhost:8100
+  - hostname: comfyui.berlin2028.dpdns.org
+    service: http://localhost:8100
+  - service: http_status:404

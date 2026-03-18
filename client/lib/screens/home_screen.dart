@@ -383,13 +383,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Comfy Pro Max',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: -0.5,
+            const Flexible(
+              child: Text(
+                'Comfy Pro Max',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const Spacer(),

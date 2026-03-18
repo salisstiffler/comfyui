@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import '../models/task_model.dart';
@@ -40,9 +39,8 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
   late PhotoViewController _photoViewController;
   final FocusNode _focusNode = FocusNode();
 
-  // Pull-to-dismiss state
+  // Pull-to-dismiss logic
   double _dragOffset = 0.0;
-  double _dragScale = 1.0;
   bool _isDragging = false;
 
   @override
@@ -74,53 +72,14 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     }
   }
 
-  void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is PointerScrollEvent) {
-      final double delta = event.scrollDelta.dy;
-      double newScale = _photoViewController.scale ?? 1.0;
-      if (delta < 0) {
-        newScale += 0.1;
-      } else {
-        newScale -= 0.1;
-      }
-      _photoViewController.scale = newScale.clamp(0.1, 10.0);
-    }
-  }
-
-  void _onVerticalDragUpdate(DragUpdateDetails details) {
-    if (_photoViewController.scale != 1.0 && _photoViewController.scale != null) return;
-    
-    setState(() {
-      _isDragging = true;
-      _dragOffset += details.delta.dy;
-      // Shrink scale as we drag down
-      if (_dragOffset > 0) {
-        _dragScale = (1.0 - (_dragOffset / 1000)).clamp(0.7, 1.0);
-      } else {
-        _dragScale = 1.0;
-      }
-    });
-  }
-
-  void _onVerticalDragEnd(DragEndDetails details) {
-    if (!_isDragging) return;
-
-    if (_dragOffset > 150 || details.primaryVelocity! > 800) {
-      Navigator.pop(context);
-    } else {
-      setState(() {
-        _isDragging = false;
-        _dragOffset = 0.0;
-        _dragScale = 1.0;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentTask = widget.images[_currentIndex];
-    final backgroundOpacity = (1.0 - (_dragOffset.abs() / 500)).clamp(0.0, 1.0);
-    
+    // Calculate scale and opacity based on drag offset
+    final dragFactor = (_dragOffset / 300).clamp(0.0, 1.0);
+    final currentScale = (1.0 - (dragFactor * 0.3)).clamp(0.7, 1.0);
+    final bgOpacity = (1.0 - (dragFactor * 0.8)).clamp(0.0, 1.0);
+
     return RawKeyboardListener(
       focusNode: _focusNode,
       autofocus: true,
@@ -136,203 +95,174 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
         }
       },
       child: Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.98 * backgroundOpacity),
+        backgroundColor: Colors.black.withOpacity(0.98 * bgOpacity),
         body: Stack(
           children: [
-            // Gallery with Pull-to-Dismiss support
+            // Pull-to-dismiss Wrapper
             GestureDetector(
-              onVerticalDragUpdate: _onVerticalDragUpdate,
-              onVerticalDragEnd: _onVerticalDragEnd,
+              onVerticalDragUpdate: (details) {
+                // Only allow drag-to-dismiss if image is not zoomed
+                if ((_photoViewController.scale ?? 1.0) <= 1.0) {
+                  setState(() {
+                    _isDragging = true;
+                    _dragOffset += details.delta.dy;
+                    if (_dragOffset < 0) _dragOffset = 0; // Only pull down
+                  });
+                }
+              },
+              onVerticalDragEnd: (details) {
+                if (_dragOffset > 150 || details.primaryVelocity! > 800) {
+                  Navigator.pop(context);
+                } else {
+                  setState(() {
+                    _isDragging = false;
+                    _dragOffset = 0.0;
+                  });
+                }
+              },
               child: Transform.translate(
                 offset: Offset(0, _dragOffset),
                 child: Transform.scale(
-                  scale: _dragScale,
-                  child: Listener(
-                    onPointerSignal: _handlePointerSignal,
-                    child: PhotoViewGallery.builder(
-                      scrollPhysics: _isDragging ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
-                      builder: (BuildContext context, int index) {
-                        return PhotoViewGalleryPageOptions(
-                          imageProvider: NetworkImage(widget.images[index].resultImageUrl ?? ''),
-                          controller: index == _currentIndex ? _photoViewController : null,
-                          initialScale: PhotoViewComputedScale.contained,
-                          minScale: PhotoViewComputedScale.contained * 0.5,
-                          maxScale: PhotoViewComputedScale.covered * 10,
-                          heroAttributes: PhotoViewHeroAttributes(tag: widget.images[index].promptId),
-                          onTapUp: (context, details, controllerValue) {
-                            if (!_isDragging) {
-                              setState(() => _showInfo = !_showInfo);
-                            }
-                          },
-                        );
-                      },
-                      itemCount: widget.images.length,
-                      loadingBuilder: (context, event) => const Center(
-                        child: CircularProgressIndicator(color: accentEmerald),
-                      ),
-                      backgroundDecoration: const BoxDecoration(color: Colors.transparent),
-                      pageController: _pageController,
-                      onPageChanged: (index) {
-                        setState(() {
-                          _currentIndex = index;
-                          _photoViewController.scale = 1.0;
-                        });
-                      },
-                    ),
+                  scale: currentScale,
+                  child: PhotoViewGallery.builder(
+                    scrollPhysics: _isDragging ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
+                    builder: (BuildContext context, int index) {
+                      return PhotoViewGalleryPageOptions(
+                        imageProvider: NetworkImage(widget.images[index].resultImageUrl ?? ''),
+                        controller: index == _currentIndex ? _photoViewController : null,
+                        initialScale: PhotoViewComputedScale.contained,
+                        minScale: PhotoViewComputedScale.contained * 0.5,
+                        maxScale: PhotoViewComputedScale.covered * 10,
+                        heroAttributes: PhotoViewHeroAttributes(tag: widget.images[index].promptId),
+                        onTapUp: (context, details, controllerValue) {
+                          if (!_isDragging) setState(() => _showInfo = !_showInfo);
+                        },
+                      );
+                    },
+                    itemCount: widget.images.length,
+                    loadingBuilder: (context, event) => const Center(child: CircularProgressIndicator(color: accentEmerald)),
+                    backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                    pageController: _pageController,
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                        _photoViewController.scale = 1.0;
+                      });
+                    },
                   ),
                 ),
               ),
             ),
 
-            // Top Bar
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedOpacity(
-                opacity: (_showInfo && !_isDragging) ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: Container(
-                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, bottom: 12),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+            // Top Bar (Hide when dragging)
+            if (!_isDragging)
+              Positioned(
+                top: 0, left: 0, right: 0,
+                child: AnimatedOpacity(
+                  opacity: _showInfo ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, bottom: 12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black38,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: Text(
-                          '${_currentIndex + 1} / ${widget.images.length}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'RobotoMono',
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
-                        onPressed: () => setState(() => _showInfo = !_showInfo),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Navigation Arrows (Hide when dragging)
-            if (!_isDragging && _currentIndex > 0)
-              Positioned(
-                left: 16,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: _navCircle(Icons.arrow_back_ios_new_rounded, _prev),
-                ),
-              ),
-            if (!_isDragging && _currentIndex < widget.images.length - 1)
-              Positioned(
-                right: 16,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: _navCircle(Icons.arrow_forward_ios_rounded, _next),
-                ),
-              ),
-
-            // Info Overlay
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutQuint,
-              bottom: (_showInfo && !_isDragging) ? 0 : -500,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0A1410).withOpacity(0.95),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.8), blurRadius: 30),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+                    child: Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: accentEmerald.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(6),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+                            child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
                           ),
-                          child: const Text(
-                            "DETAILS",
-                            style: TextStyle(
-                              color: accentEmerald,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 2,
-                            ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          decoration: BoxDecoration(color: Colors.black38, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white10)),
+                          child: Text(
+                            '${_currentIndex + 1} / ${widget.images.length}',
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'RobotoMono'),
                           ),
                         ),
                         const Spacer(),
                         IconButton(
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white24),
-                          onPressed: () => setState(() => _showInfo = false),
+                          icon: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
+                          onPressed: () => setState(() => _showInfo = !_showInfo),
                         ),
+                        const SizedBox(width: 8),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      currentTask.prompt,
-                      style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5, fontWeight: FontWeight.w500),
-                      maxLines: 8,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 24),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _infoChip(Icons.speed, 'Steps: ${currentTask.steps}'),
-                        _infoChip(Icons.tune, 'CFG: ${currentTask.cfg}'),
-                        _infoChip(Icons.grain, 'Seed: ${currentTask.seed ?? "Random"}'),
-                        _infoChip(Icons.aspect_ratio, '${currentTask.width}x${currentTask.height}'),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+
+            // Navigation Arrows (Hide when dragging)
+            if (!_isDragging && _currentIndex > 0)
+              Positioned(
+                left: 16, top: 0, bottom: 0,
+                child: Center(child: _navCircle(Icons.arrow_back_ios_new_rounded, _prev)),
+              ),
+            if (!_isDragging && _currentIndex < widget.images.length - 1)
+              Positioned(
+                right: 16, top: 0, bottom: 0,
+                child: Center(child: _navCircle(Icons.arrow_forward_ios_rounded, _next)),
+              ),
+
+            // Info Overlay (Hide when dragging)
+            if (!_isDragging)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutQuint,
+                bottom: _showInfo ? 0 : -500,
+                left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A1410).withOpacity(0.95),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.8), blurRadius: 30)],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: accentEmerald.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                            child: const Text("DETAILS", style: TextStyle(color: accentEmerald, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white24),
+                            onPressed: () => setState(() => _showInfo = false),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(currentTask.prompt, style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5, fontWeight: FontWeight.w500), maxLines: 8, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 10, runSpacing: 10,
+                        children: [
+                          _infoChip(Icons.speed, 'Steps: ${currentTask.steps}'),
+                          _infoChip(Icons.tune, 'CFG: ${currentTask.cfg}'),
+                          _infoChip(Icons.grain, 'Seed: ${currentTask.seed ?? "Random"}'),
+                          _infoChip(Icons.aspect_ratio, '${currentTask.width}x${currentTask.height}'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -343,33 +273,21 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     onTap: onTap,
     child: AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.black26,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white10),
-      ),
+      width: 44, height: 44,
+      decoration: BoxDecoration(color: Colors.black26, shape: BoxShape.circle, border: Border.all(color: Colors.white10)),
       child: Icon(icon, color: Colors.white70, size: 18),
     ),
   );
 
   Widget _infoChip(IconData icon, String text) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: Colors.white.withOpacity(0.08)),
-    ),
+    decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.08))),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 13, color: accentEmerald),
         const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
-        ),
+        Text(text, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
       ],
     ),
   );

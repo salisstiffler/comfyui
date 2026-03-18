@@ -4,7 +4,7 @@ import '../models/task_model.dart';
 
 class ApiService {
   // Docker maps host port 8100 to container port 8000
-  static String baseUrl = 'http://127.0.0.1:8100';
+  static String baseUrl = 'https://comfyui.berlin2027.dpdns.org';
   static String userId = 'guest';
 
   static Future<String?> generateImage(
