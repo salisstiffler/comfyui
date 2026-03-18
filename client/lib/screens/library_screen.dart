@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../models/task_model.dart';
 import '../providers/task_provider.dart';
@@ -245,7 +246,21 @@ class _LibraryScreenState extends State<LibraryScreen>
           if (t.isMusic)
             _musicCard(t)
           else
-            Image.network(t.resultImageUrl ?? '', fit: BoxFit.cover),
+            CachedNetworkImage(
+              imageUrl: t.resultImageUrl ?? '',
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(
+                color: Colors.white.withOpacity(0.05),
+                child: const Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: accentEmerald),
+                  ),
+                ),
+              ),
+              errorWidget: (context, url, error) => const Icon(Icons.error_outline, color: Colors.white24),
+            ),
           // Gradient overlay + label
           Positioned(
             bottom: 0,

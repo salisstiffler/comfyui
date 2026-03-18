@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../providers/player_provider.dart';
 import '../theme/app_theme.dart';
@@ -19,9 +20,12 @@ class _GlobalMiniCirclePlayerState extends State<GlobalMiniCirclePlayer>
   bool _isDragging = false;
   bool _isAtRight = true;
   late Size _screenSize;
+  
   late AnimationController _appearCtrl;
   late Animation<double> _appearAnim;
+  
   late AnimationController _rotateCtrl;
+  
   bool _appeared = false;
 
   @override
@@ -35,6 +39,7 @@ class _GlobalMiniCirclePlayerState extends State<GlobalMiniCirclePlayer>
       parent: _appearCtrl,
       curve: Curves.easeOutBack,
     );
+    
     _rotateCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 15),
@@ -110,8 +115,8 @@ class _GlobalMiniCirclePlayerState extends State<GlobalMiniCirclePlayer>
         if (mounted) _appearCtrl.reverse();
       });
     }
-
-    // 同步旋转动画 - 使用更安全的方式
+    
+    // 同步旋转动画
     if (p.isPlaying) {
       if (!_rotateCtrl.isAnimating) _rotateCtrl.repeat();
     } else {
@@ -197,11 +202,13 @@ class _GlobalMiniCirclePlayerState extends State<GlobalMiniCirclePlayer>
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(32),
                         child: p.currentTask?.resultImageUrl != null
-                            ? Image.network(
-                                p.currentTask!.resultImageUrl ?? '',
+                            ? CachedNetworkImage(
+                                imageUrl: p.currentTask!.resultImageUrl ?? '',
                                 width: 64,
                                 height: 64,
                                 fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(color: Colors.black26),
+                                errorWidget: (context, url, error) => const Icon(Icons.music_note_rounded, color: Colors.white24),
                               )
                             : Container(
                                 width: 64,

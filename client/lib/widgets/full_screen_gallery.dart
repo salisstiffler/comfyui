@@ -3,30 +3,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/task_model.dart';
 import '../theme/app_theme.dart';
 
 class FullScreenGallery extends StatefulWidget {
   final List<AiTask> images;
   final int initialIndex;
+
   const FullScreenGallery({
     super.key,
     required this.images,
     required this.initialIndex,
   });
 
-  static void show(BuildContext context, List<AiTask> list, int idx) =>
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          opaque: false,
-          barrierColor: Colors.transparent,
-          pageBuilder: (_, __, ___) => FullScreenGallery(images: list, initialIndex: idx),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
+  static void show(BuildContext context, List<AiTask> images, int index) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (ctx, anim, _) => FadeTransition(
+          opacity: anim,
+          child: FullScreenGallery(images: images, initialIndex: index),
         ),
-      );
+      ),
+    );
+  }
 
   @override
   State<FullScreenGallery> createState() => _FullScreenGalleryState();
@@ -35,7 +36,7 @@ class FullScreenGallery extends StatefulWidget {
 class _FullScreenGalleryState extends State<FullScreenGallery> {
   late PageController _pageController;
   late int _currentIndex;
-  bool _showInfo = false;
+  bool _showInfo = true;
   late PhotoViewController _photoViewController;
   final FocusNode _focusNode = FocusNode();
 
@@ -49,7 +50,6 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
     _photoViewController = PhotoViewController();
-    _focusNode.requestFocus();
   }
 
   @override
@@ -60,15 +60,21 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
     super.dispose();
   }
 
-  void _next() {
-    if (_currentIndex < widget.images.length - 1) {
-      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  void _prev() {
+    if (_currentIndex > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
   }
 
-  void _prev() {
-    if (_currentIndex > 0) {
-      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  void _next() {
+    if (_currentIndex < widget.images.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
   }
 
@@ -85,10 +91,10 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
       autofocus: true,
       onKey: (RawKeyEvent event) {
         if (event is RawKeyDownEvent) {
-          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            _next();
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
             _prev();
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            _next();
           } else if (event.logicalKey == LogicalKeyboardKey.escape) {
             Navigator.pop(context);
           }
@@ -128,12 +134,12 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                     scrollPhysics: _isDragging ? const NeverScrollableScrollPhysics() : const BouncingScrollPhysics(),
                     builder: (BuildContext context, int index) {
                       return PhotoViewGalleryPageOptions(
-                        imageProvider: NetworkImage(widget.images[index].resultImageUrl ?? ''),
+                        imageProvider: CachedNetworkImageProvider(widget.images[index].resultImageUrl ?? ''),
                         controller: index == _currentIndex ? _photoViewController : null,
                         initialScale: PhotoViewComputedScale.contained,
                         minScale: PhotoViewComputedScale.contained * 0.5,
                         maxScale: PhotoViewComputedScale.covered * 10,
-                        heroAttributes: PhotoViewHeroAttributes(tag: widget.images[index].promptId),
+                        heroAttributes: PhotoViewHeroAttributes(tag: widget.images[index].promptId),     
                         onTapUp: (context, details, controllerValue) {
                           if (!_isDragging) setState(() => _showInfo = !_showInfo);
                         },
@@ -162,7 +168,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                   opacity: _showInfo ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 200),
                   child: Container(
-                    padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, bottom: 12),
+                    padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top, bottom: 12),       
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -192,7 +198,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                         ),
                         const Spacer(),
                         IconButton(
-                          icon: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
+                          icon: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),   
                           onPressed: () => setState(() => _showInfo = !_showInfo),
                         ),
                         const SizedBox(width: 8),
@@ -227,7 +233,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                     color: const Color(0xFF0A1410).withOpacity(0.95),
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                     border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.8), blurRadius: 30)],
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.8), blurRadius: 30)],        
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,7 +248,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                           ),
                           const Spacer(),
                           IconButton(
-                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white24),
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white24),  
                             onPressed: () => setState(() => _showInfo = false),
                           ),
                         ],
@@ -256,7 +262,7 @@ class _FullScreenGalleryState extends State<FullScreenGallery> {
                           _infoChip(Icons.speed, 'Steps: ${currentTask.steps}'),
                           _infoChip(Icons.tune, 'CFG: ${currentTask.cfg}'),
                           _infoChip(Icons.grain, 'Seed: ${currentTask.seed ?? "Random"}'),
-                          _infoChip(Icons.aspect_ratio, '${currentTask.width}x${currentTask.height}'),
+                          _infoChip(Icons.aspect_ratio, '${currentTask.width}x${currentTask.height}'),   
                         ],
                       ),
                     ],

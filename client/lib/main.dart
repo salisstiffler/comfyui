@@ -1,6 +1,10 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'theme/app_theme.dart';
 import 'providers/generator_provider.dart';
@@ -13,6 +17,13 @@ import 'widgets/global_player.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize FFI for desktop (Windows/Linux/macOS)
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   runApp(
     MultiProvider(
       providers: [
