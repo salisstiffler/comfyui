@@ -396,29 +396,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen>
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const Spacer(),
-            if (_systemStats != null && _isOnline) ...[
-              _statChip(
-                Icons.memory,
-                "${((_systemStats!['vram']?['free'] ?? 0) / 1024 / 1024 / 1024).toStringAsFixed(1)}G",
-              ),
-              const SizedBox(width: 8),
-            ],
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border:
-                    Border.all(color: accentEmerald.withOpacity(0.4), width: 2),
-                image: const DecorationImage(
-                  image: NetworkImage(
-                    "https://lh3.googleusercontent.com/aida-public/AB6AXuBwNfcTmuMd1GR2qJrsuGplDVN7ABP1ro_AO0ASg8GJcazrysQSW1IEmU5UaXD_ARQVTx7nFlD1YdSPr0gTC_eoPO52PLsl_IJC7qNdfEJ27i7L4p3rojbg5YwIOWl6CtHqF85H3YQaNs93OroUILiXuvcwBim4l3l8FC6mgPHParItdpB6giHV8BsM1ZWUzwNti4FUGSIe04n_FwweXGkrusoSI38Hq_a2ZJREXInvY0wKMf5bae8ErakSXUmA7gcOBm0WanOQvDlo",
-                  ),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
           ],
         ),
       );
